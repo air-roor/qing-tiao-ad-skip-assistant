@@ -1,0 +1,89 @@
+name: 广告未跳过或发生误触
+description: 提交设备、应用和轻跳诊断信息，帮助复现问题
+title: "[问题] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请先遮挡账号、手机号、聊天内容等隐私信息，不要提交密码、验证码或完整私人页面截图。
+
+  - type: input
+    id: device
+    attributes:
+      label: 手机品牌和型号
+      placeholder: 例如 HUAWEI Pura 70（ADY-AL10）
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: 系统完整版本
+      placeholder: 例如 HarmonyOS 4.2.0.243
+    validations:
+      required: true
+
+  - type: input
+    id: target_app
+    attributes:
+      label: 出现问题的应用及版本
+      placeholder: 例如 QQ 音乐 14.x
+    validations:
+      required: true
+
+  - type: dropdown
+    id: problem_type
+    attributes:
+      label: 问题类型
+      options:
+        - 广告没有识别
+        - 识别或点击太慢
+        - 识别后广告没有消失
+        - 误触了非广告按钮
+        - 选择应用后没有保存
+        - 无障碍服务自动关闭
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从冷启动目标应用开始，写清广告出现位置、等待时间和按钮上可见的文字。
+      placeholder: |
+        1. 在轻跳中勾选并保存……
+        2. 完全关闭目标应用后重新打开……
+        3. 出现……
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: 轻跳首页“最近诊断”
+      description: 请原样抄写诊断文字；不要附带私人页面内容。
+    validations:
+      required: true
+
+  - type: input
+    id: button_text
+    attributes:
+      label: 广告按钮可见文字
+      placeholder: 例如 跳过 2、0秒跳过、Skip ad；没有文字请写“无”
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 已确认目标应用在轻跳中被勾选并保存
+          required: true
+        - label: 已确认系统无障碍设置中的“轻跳 · 自动跳过”处于开启状态
+          required: true
+        - label: 已遮挡账号、手机号、聊天内容等隐私信息
+          required: true

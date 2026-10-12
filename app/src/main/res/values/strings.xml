@@ -1,0 +1,3 @@
+<resources>
+    <string name="service_description">在你选择的应用内读取界面控件文字，并点击明确识别的广告跳过或关闭按钮。仅本机处理，不联网、不截图；可能漏识别或误判。可随时在轻跳首页暂停，或在系统设置中关闭此服务。</string>
+</resources>
