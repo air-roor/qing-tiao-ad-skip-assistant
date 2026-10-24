@@ -25,10 +25,10 @@ $run = Join-Path $out ('run-' + [DateTime]::Now.ToString('yyyyMMdd-HHmmss-fff'))
 foreach($part in @('classes','generated','dex','tests')) { New-Item -ItemType Directory -Force -Path (Join-Path $run $part) | Out-Null }
 $source = Join-Path $project 'app\src\main'
 Run "$bt\aapt2.exe" @('compile','--dir',"$source\res",'-o',"$run\resources.zip")
-Run "$bt\aapt2.exe" @('link','-o',"$run\base.apk",'-I',$androidJar,'--manifest',"$source\AndroidManifest.xml",'--java',"$run\generated",'--version-code','12','--version-name','0.3.0-beta.1',"$run\resources.zip")
+Run "$bt\aapt2.exe" @('link','-o',"$run\base.apk",'-I',$androidJar,'--manifest',"$source\AndroidManifest.xml",'--java',"$run\generated",'--version-code','13','--version-name','0.3.0-beta.2',"$run\resources.zip")
 $sources = @((Get-ChildItem "$source\java","$run\generated" -Recurse -Filter '*.java').FullName)
 Run $javac (@('-encoding','UTF-8','-source','8','-target','8','-classpath',$androidJar,'-d',"$run\classes") + $sources)
-Run $javac @('-encoding','UTF-8','-d',"$run\tests","$source\java\cn\local\adskip\Rules.java","$project\tests\RulesTest.java")
+Run $javac @('-encoding','UTF-8','-d',"$run\tests","$source\java\cn\local\adskip\Rules.java","$source\java\cn\local\adskip\Feedback.java","$project\tests\RulesTest.java")
 Run $java @('-cp',"$run\tests",'cn.local.adskip.RulesTest')
 Run $jar @('cf',"$run\classes.jar",'-C',"$run\classes",'.')
 Run $java @('-cp',"$bt\lib\d8.jar",'com.android.tools.r8.D8','--lib',$androidJar,'--min-api','26','--output',"$run\dex","$run\classes.jar")

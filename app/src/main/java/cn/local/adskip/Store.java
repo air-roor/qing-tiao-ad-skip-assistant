@@ -24,11 +24,17 @@ final class Store {
             .putString("last_package", pkg).putLong("last_time", System.currentTimeMillis())
             .putString("last_path", path).putLong("last_elapsed", elapsed).apply();
     }
+    static void feedbackPrepared(Context c, String id, String category) {
+        SharedPreferences p = prefs(c);
+        p.edit().putInt("feedback_prepared_count", p.getInt("feedback_prepared_count", 0) + 1)
+            .putString("last_feedback_id", id).putString("last_feedback_category", category)
+            .putLong("last_feedback_time", System.currentTimeMillis()).apply();
+    }
     static String exportText(Context c, boolean serviceEnabled) {
         SharedPreferences p = prefs(c);
         long lastTime = p.getLong("last_time", 0), diagTime = p.getLong("diag_time", 0);
         return "轻跳诊断（用户主动导出）\n"
-            + "版本：0.3.0-beta.1 (12)\n"
+            + "版本：0.3.0-beta.2 (13)\n"
             + "设备：" + Build.MANUFACTURER + " " + Build.MODEL + "\n"
             + "系统：Android " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT + "\n"
             + "无障碍状态：" + (serviceEnabled ? "系统已授权或服务已连接" : "未授权") + "\n"
