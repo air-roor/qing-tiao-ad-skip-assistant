@@ -47,6 +47,12 @@ public final class RulesTest {
         expect(Rules.sensitiveContext("请输入支付密码"), "payment password protected");
         expect(Rules.sensitiveContext("短信验证码"), "sms code protected");
         expect(!Rules.sensitiveContext("广告跳过"), "ad page is not sensitive context");
+        expect("Skip Ad".equals(Feedback.clean("Ｓｋｉｐ Ａｄ", 20)), "feedback normalizes full-width text");
+        expect(!Feedback.clean("hello\u0000world", 20).contains("\u0000"), "feedback removes control characters");
+        expect(Feedback.clean("123456", 4).equals("1234…"), "feedback truncates long fields");
+        String feedback = Feedback.build("QJ-1", "广告没有跳过", "示例应用", "第二次启动未跳过", false, "private diagnostic");
+        expect(feedback.contains("反馈编号：QJ-1") && feedback.contains("示例应用"), "feedback includes structured fields");
+        expect(!feedback.contains("private diagnostic"), "feedback respects diagnostic choice");
         System.out.println("PASS: " + count + " rule and guard checks");
     }
 }

@@ -10,6 +10,15 @@ body:
         感谢反馈。请先遮挡账号、手机号、聊天内容等隐私信息，不要提交密码、验证码或完整私人页面截图。
 
   - type: input
+    id: report_id
+    attributes:
+      label: 轻跳反馈编号
+      description: 在应用内“填写公测反馈”预览顶部可找到；如果没有请写“无”。
+      placeholder: 例如 QJ-20261024-2130-123456
+    validations:
+      required: true
+
+  - type: input
     id: device
     attributes:
       label: 手机品牌和型号

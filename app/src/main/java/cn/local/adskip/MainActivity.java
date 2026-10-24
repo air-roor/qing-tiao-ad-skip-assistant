@@ -5,6 +5,8 @@ import android.app.AlertDialog;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Intent;
 import android.content.ComponentName;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -22,7 +24,7 @@ import java.util.*;
 
 public final class MainActivity extends Activity {
     private static final String REPOSITORY = "https://github.com/air-roor/qing-tiao-ad-skip-assistant";
-    private static final String RELEASES = REPOSITORY + "/releases/latest";
+    private static final String RELEASES = REPOSITORY + "/releases/tag/v0.3.0-beta.2";
     private LinearLayout body;
     private final int ink = Color.rgb(22, 44, 53), teal = Color.rgb(0, 111, 101);
     @Override public void onCreate(Bundle state) { super.onCreate(state); }
@@ -42,7 +44,7 @@ public final class MainActivity extends Activity {
         scroll.addView(body); setContentView(scroll);
         label(body, "轻 跳  /  PRODUCT BETA", 13, teal, true);
         label(body, "少一点打扰\n多一点专注", 32, ink, true);
-        label(body, "广告跳过助手 · 0.3.0-beta.1", 14, ink, false);
+        label(body, "广告跳过助手 · 0.3.0-beta.2", 14, ink, false);
         LinearLayout status = card();
         boolean enabled = Store.prefs(this).getBoolean("enabled", false);
         boolean access = serviceEnabled();
@@ -78,12 +80,13 @@ public final class MainActivity extends Activity {
         if (diagTime > 0) label(stats, "最近诊断：" + DateFormat.getDateTimeInstance().format(new Date(diagTime)) + "\n"
             + Store.prefs(this).getString("diag_package", "") + "\n" + Store.prefs(this).getString("diag_result", ""), 12, ink, false);
         button(stats, "导出诊断（发送前可检查）", () -> exportDiagnostics());
-        LinearLayout feedback = card(); label(feedback, "分享与反馈", 20, ink, true);
-        label(feedback, "轻跳没有联网权限。以下操作会调用系统分享页或浏览器，由你决定发送目标。", 13, ink, false);
+        LinearLayout feedback = card(); label(feedback, "免费公测与反馈", 20, ink, true);
+        label(feedback, "当前公测免费且不需要账号。反馈会先生成可检查的文字，不会自动上传；由你决定复制、系统分享或在 GitHub 提交。", 13, ink, false);
+        button(feedback, "填写公测反馈", () -> feedbackForm());
         button(feedback, "分享轻跳下载地址", () -> shareApp());
-        button(feedback, "在 GitHub 反馈问题", () -> openUrl(REPOSITORY + "/issues/new/choose"));
+        button(feedback, "查看公测、账号与付费计划", () -> openUrl(REPOSITORY + "/blob/main/docs/BETA_FEEDBACK_AND_ACCOUNT_PLAN.md"));
         button(feedback, "查看隐私说明", () -> openUrl(REPOSITORY + "/blob/main/docs/PRIVACY.md"));
-        label(body, "界面识别完全在本机进行，无联网权限，不截图、不上传屏幕内容。仅保存开关、应用选择、点击次数和最近诊断。只有你主动使用系统分享页时，所选目标应用才会收到分享文字。\n\n当前仍是测试版，尚未承诺第三方 App 的兼容率；图片广告、强制倒计时和没有可读按钮的广告可能无法处理。", 13, ink, false);
+        label(body, "界面识别完全在本机进行，无联网权限，不截图、不上传屏幕内容。仅保存开关、应用选择、点击统计、最近诊断和反馈预览记录；不保存反馈正文。只有你主动复制、打开浏览器或使用系统分享页时，内容才会离开轻跳。\n\n当前仍是测试版，尚未承诺第三方 App 的兼容率；图片广告、强制倒计时和没有可读按钮的广告可能无法处理。", 13, ink, false);
     }
     private boolean serviceEnabled() {
         if (SkipService.connected) return true;
@@ -173,9 +176,72 @@ public final class MainActivity extends Activity {
     }
     private void exportDiagnostics() {
         Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
-            .putExtra(Intent.EXTRA_SUBJECT, "轻跳 0.3.0-beta.1 诊断")
+            .putExtra(Intent.EXTRA_SUBJECT, "轻跳 0.3.0-beta.2 诊断")
             .putExtra(Intent.EXTRA_TEXT, Store.exportText(this, serviceEnabled()));
         startActivity(Intent.createChooser(send, "导出诊断；发送前请检查内容"));
+    }
+    private void feedbackForm() {
+        LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(4), dp(18), 0);
+        TextView note = new TextView(this); note.setText("先选择问题类型并描述现象。下一步会显示完整反馈内容，确认后才会离开轻跳。");
+        note.setTextColor(ink); note.setTextSize(13); note.setPadding(0, dp(4), 0, dp(8)); form.addView(note);
+        Spinner category = new Spinner(this);
+        ArrayAdapter<String> categoryAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, Feedback.CATEGORIES);
+        categoryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        category.setAdapter(categoryAdapter); form.addView(category);
+        EditText targetApp = new EditText(this); targetApp.setHint("相关应用名称或包名（例如：QQ音乐）"); targetApp.setSingleLine(true); form.addView(targetApp);
+        EditText detail = new EditText(this); detail.setHint("请写明第几次启动、广告表现、是否出现按钮，以及你期望的结果");
+        detail.setMinLines(4); detail.setMaxLines(8); detail.setGravity(android.view.Gravity.TOP); form.addView(detail);
+        CheckBox includeDiagnostic = new CheckBox(this); includeDiagnostic.setText("附带本机诊断（包含设备型号、系统版本和最近应用包名）");
+        includeDiagnostic.setChecked(true); form.addView(includeDiagnostic);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("填写公测反馈").setView(form)
+            .setNegativeButton("取消", null).setPositiveButton("预览反馈", null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String categoryText = String.valueOf(category.getSelectedItem());
+            String description = Feedback.clean(detail.getText().toString(), 800);
+            if (description.length() < 4) { detail.setError("请至少写 4 个字，便于复现问题"); detail.requestFocus(); return; }
+            String id = Feedback.newId();
+            String report = Feedback.build(id, categoryText, targetApp.getText().toString(), description,
+                includeDiagnostic.isChecked(), Store.exportText(this, serviceEnabled()));
+            Store.feedbackPrepared(this, id, categoryText);
+            dialog.dismiss();
+            previewFeedback(categoryText, targetApp.getText().toString(), report);
+        }));
+        dialog.show();
+    }
+    private void previewFeedback(String category, String targetApp, String report) {
+        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(18), dp(4), dp(18), 0);
+        TextView note = new TextView(this); note.setText("下面内容可以编辑。请先检查应用包名和诊断，再选择发送方式。GitHub Issue 是公开内容；涉及隐私时请使用复制或系统分享发送给开发者。");
+        note.setTextColor(ink); note.setTextSize(13); note.setPadding(0, dp(4), 0, dp(8)); content.addView(note);
+        EditText preview = new EditText(this); preview.setText(report); preview.setGravity(android.view.Gravity.TOP); preview.clearFocus();
+        preview.setMinLines(10); preview.setMaxLines(16); content.addView(preview, new LinearLayout.LayoutParams(-1, dp(390)));
+        Button copy = new Button(this); copy.setText("复制反馈文字"); copy.setAllCaps(false); content.addView(copy);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("检查反馈内容").setView(content)
+            .setNegativeButton("返回", null).setNeutralButton("提交到 GitHub", null).setPositiveButton("系统分享", null).create();
+        dialog.setOnShowListener(ignored -> {
+            copy.setOnClickListener(v -> { copyText(preview.getText().toString()); Toast.makeText(this, "反馈已复制", Toast.LENGTH_SHORT).show(); });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> shareFeedback(category, preview.getText().toString()));
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> openGitHubFeedback(category, targetApp, preview.getText().toString()));
+        });
+        dialog.show();
+    }
+    private void shareFeedback(String category, String report) {
+        Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, "轻跳公测反馈 · " + Feedback.clean(category, 40))
+            .putExtra(Intent.EXTRA_TEXT, report);
+        startActivity(Intent.createChooser(send, "选择反馈接收方式"));
+    }
+    private void openGitHubFeedback(String category, String targetApp, String report) {
+        String app = Feedback.clean(targetApp, 50).replace('\n', ' ');
+        String title = "[公测反馈] " + Feedback.clean(category, 40) + (app.isEmpty() ? "" : " · " + app);
+        Uri url = Uri.parse(REPOSITORY + "/issues/new").buildUpon()
+            .appendQueryParameter("title", title).appendQueryParameter("body", report).build();
+        openUrl(url.toString());
+    }
+    private void copyText(String text) {
+        ClipboardManager clipboard = (ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+        clipboard.setPrimaryClip(ClipData.newPlainText("轻跳公测反馈", text));
     }
     private void openUrl(String url) {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
