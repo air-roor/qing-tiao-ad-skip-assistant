@@ -2,6 +2,7 @@ package cn.local.adskip;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
+import android.app.KeyguardManager;
 import android.graphics.Rect;
 import android.graphics.Path;
 import android.os.Handler;
@@ -60,7 +61,7 @@ public final class SkipService extends AccessibilityService {
         if (!pkg.equals(getPackageName()) || DemoActivity.active) Store.diagnostic(this, pkg, reason);
     }
     private void recordClick(String pkg, String path, long now) {
-        Store.record(this, pkg);
+        Store.record(this, pkg, path, Math.max(0, now - enteredAt));
         Log.i(TAG, "CLICK pkg=" + pkg + " path=" + path + " elapsedMs=" + Math.max(0, now - enteredAt));
     }
     private void scanWindow() {
@@ -90,8 +91,12 @@ public final class SkipService extends AccessibilityService {
             windowStateChanged = false;
             boolean demo = pkg.equals(getPackageName()) && DemoActivity.active;
             if (pkg.equals(getPackageName()) && !demo) return;
+            if (!demo && Rules.protectedPackage(pkg)) { report(pkg, "系统敏感应用受保护，不执行自动点击"); return; }
             allowed = demo || Store.apps(this).contains(pkg);
             if (!allowed) { report(pkg, "未选中此应用，请在首页勾选并保存"); return; }
+            KeyguardManager keyguard = (KeyguardManager)getSystemService(KEYGUARD_SERVICE);
+            if (!demo && keyguard != null && keyguard.isKeyguardLocked()) { report(pkg, "设备处于锁屏状态，已停止自动点击"); return; }
+            if (!demo && sensitiveWindow(root)) { report(pkg, "界面包含输入框、密码或身份验证内容，已停止自动点击"); return; }
             if (clicks >= 5) { report(pkg, "已达本次会话 5 次点击上限"); return; }
             if (lastClick >= 0 && now - lastClick < 250) { schedule(250 - (now - lastClick), false); return; }
 
@@ -204,6 +209,17 @@ public final class SkipService extends AccessibilityService {
         return text.trim().isEmpty() || Rules.candidate(text, marker, elapsed, popups);
     }
     private boolean tapMatchedNode(AccessibilityNodeInfo node, String pkg, boolean marker, long elapsed, boolean popups) {
+        // Re-read the live node immediately before acting. This prevents a candidate from a
+        // previous animation frame being clicked after the screen has already changed.
+        if (!node.refresh() || !node.isVisibleToUser() || !node.isEnabled()
+                || node.isEditable() || node.isPassword()
+                || !pkg.equals(str(node.getPackageName())) || node.getWindowId() != currentWindowId) return false;
+        String viewId = str(node.getViewIdResourceName());
+        boolean textStillMatches = Rules.candidate(str(node.getText()), marker, elapsed, popups)
+            || Rules.candidate(str(node.getContentDescription()), marker, elapsed, popups);
+        boolean idStillMatches = Rules.adSkipViewId(viewId) || (marker && Rules.skipLikeViewId(viewId))
+            || knownPackageControl(pkg, viewId, popups);
+        if (!textStillMatches && !idStillMatches) return false;
         // A visible matched label is the fastest target even when the SDK handles touch in a parent.
         if (gestureTap(node)) return true;
         AccessibilityNodeInfo target = clickTarget(node, pkg, marker, elapsed, popups);
@@ -241,7 +257,7 @@ public final class SkipService extends AccessibilityService {
                 if (!skip.isVisibleToUser() || !skip.isEnabled() || !"跳过".equals(str(skip.getText()).trim())) continue;
                 Rect bounds = new Rect(); skip.getBoundsInScreen(bounds);
                 if (bounds.isEmpty() || bounds.centerX() < screenWidth * 2 / 3 || bounds.centerY() > screenHeight / 4) continue;
-                return gestureTap(skip) || skip.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                return tapMatchedNode(skip, pkg, true, 0, true);
             }
             return false;
         } finally {
@@ -279,6 +295,29 @@ public final class SkipService extends AccessibilityService {
         } finally {
             for (AccessibilityNodeInfo hit : hits) hit.recycle();
         }
+    }
+    private boolean sensitiveWindow(AccessibilityNodeInfo root) {
+        AccessibilityNodeInfo focus = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (focus != null) {
+            try {
+                if (focus.isVisibleToUser() && (focus.isEditable() || focus.isPassword()
+                        || Rules.sensitiveContext(str(focus.getText()))
+                        || Rules.sensitiveContext(str(focus.getContentDescription())))) return true;
+            } finally { if (focus != root) focus.recycle(); }
+        }
+        String[] labels = {"支付密码", "登录密码", "交易密码", "短信验证码", "银行卡号", "身份验证"};
+        for (String label : labels) {
+            List<AccessibilityNodeInfo> hits = root.findAccessibilityNodeInfosByText(label);
+            try {
+                for (AccessibilityNodeInfo node : hits) {
+                    if (node.isVisibleToUser() && (Rules.sensitiveContext(str(node.getText()))
+                            || Rules.sensitiveContext(str(node.getContentDescription())))) return true;
+                }
+            } finally {
+                for (AccessibilityNodeInfo hit : hits) hit.recycle();
+            }
+        }
+        return false;
     }
     private static String str(CharSequence value) { return value == null ? "" : value.toString(); }
     @Override public void onInterrupt() {

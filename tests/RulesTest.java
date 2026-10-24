@@ -39,6 +39,14 @@ public final class RulesTest {
         expect(Rules.compactParent(100,40,120,50,1,1), "compact parent");
         expect(!Rules.compactParent(100,40,500,500,1,1), "large parent protected");
         expect(!Rules.compactParent(100,40,120,50,2,1), "multi child parent protected");
+        expect(Rules.candidate("Ｓｋｉｐ Ａｄ",false,100,true), "full-width normalized");
+        expect(Rules.candidate("跳\u200B过1",false,100,true), "zero-width normalized");
+        expect(Rules.protectedPackage("com.android.settings"), "settings protected");
+        expect(Rules.protectedPackage("com.google.android.permissioncontroller"), "permission controller protected");
+        expect(!Rules.protectedPackage("com.example.video"), "ordinary package allowed");
+        expect(Rules.sensitiveContext("请输入支付密码"), "payment password protected");
+        expect(Rules.sensitiveContext("短信验证码"), "sms code protected");
+        expect(!Rules.sensitiveContext("广告跳过"), "ad page is not sensitive context");
         System.out.println("PASS: " + count + " rule and guard checks");
     }
 }

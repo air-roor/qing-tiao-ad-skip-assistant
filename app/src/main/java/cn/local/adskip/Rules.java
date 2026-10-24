@@ -1,12 +1,26 @@
 package cn.local.adskip;
 
+import java.text.Normalizer;
 import java.util.Locale;
 
 /** Deliberately conservative, deterministic rules. No arbitrary close/X clicking. */
 public final class Rules {
     private Rules() {}
     public static String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+        if (value == null) return "";
+        return Normalizer.normalize(value, Normalizer.Form.NFKC).replaceAll("[\\u200B\\u200C\\u200D\\uFEFF]", "")
+            .trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    }
+    public static boolean protectedPackage(String pkg) {
+        String s = normalize(pkg);
+        return s.equals("android") || s.equals("com.android.systemui") || s.equals("com.android.settings")
+            || s.contains("permissioncontroller") || s.contains("packageinstaller")
+            || s.endsWith(".incallui") || s.equals("com.android.phone");
+    }
+    public static boolean sensitiveContext(String value) {
+        String s = normalize(value).replace(" ", "");
+        return s.contains("支付密码") || s.contains("登录密码") || s.contains("交易密码")
+            || s.contains("短信验证码") || s.contains("银行卡号") || s.contains("身份验证");
     }
     public static boolean adMarker(String value) {
         String s = normalize(value);
