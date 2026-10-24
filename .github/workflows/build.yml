@@ -21,11 +21,13 @@ jobs:
           distribution: microsoft
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
         shell: pwsh
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: |
+          $sdkManager = Join-Path $env:ANDROID_HOME 'cmdline-tools\latest\bin\sdkmanager.bat'
+          if (!(Test-Path -LiteralPath $sdkManager)) { throw "sdkmanager not found at $sdkManager" }
+          & $sdkManager "platforms;android-35" "build-tools;35.0.0"
+          if ($LASTEXITCODE -ne 0) { throw "sdkmanager failed with exit code $LASTEXITCODE" }
 
       - name: Build, test, align and verify APK
         shell: pwsh
