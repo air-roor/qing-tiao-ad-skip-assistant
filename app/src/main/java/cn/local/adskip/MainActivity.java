@@ -9,8 +9,11 @@ import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.*;
@@ -18,6 +21,8 @@ import java.text.DateFormat;
 import java.util.*;
 
 public final class MainActivity extends Activity {
+    private static final String REPOSITORY = "https://github.com/air-roor/qing-tiao-ad-skip-assistant";
+    private static final String RELEASES = REPOSITORY + "/releases/latest";
     private LinearLayout body;
     private final int ink = Color.rgb(22, 44, 53), teal = Color.rgb(0, 111, 101);
     @Override public void onCreate(Bundle state) { super.onCreate(state); }
@@ -35,9 +40,9 @@ public final class MainActivity extends Activity {
         scroll.setBackgroundColor(Color.rgb(240, 247, 244));
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); body.setPadding(dp(24), dp(30), dp(24), dp(32));
         scroll.addView(body); setContentView(scroll);
-        label(body, "轻 跳  /  EARLY ACCESS", 13, teal, true);
+        label(body, "轻 跳  /  PRODUCT BETA", 13, teal, true);
         label(body, "少一点打扰\n多一点专注", 32, ink, true);
-        label(body, "广告跳过助手 · 本机版 0.2.0", 14, ink, false);
+        label(body, "广告跳过助手 · 0.3.0-beta.1", 14, ink, false);
         LinearLayout status = card();
         boolean enabled = Store.prefs(this).getBoolean("enabled", false);
         boolean access = serviceEnabled();
@@ -58,6 +63,7 @@ public final class MainActivity extends Activity {
         Switch popups = new Switch(this); popups.setText("处理明确的“关闭广告”按钮"); popups.setTextSize(15);
         popups.setChecked(Store.prefs(this).getBoolean("popups", true)); options.addView(popups);
         popups.setOnCheckedChangeListener((v, value) -> Store.prefs(this).edit().putBoolean("popups", value).apply());
+        label(options, "点击前会重新读取实时控件。锁屏、系统敏感应用，以及含输入框、密码或身份验证内容的页面会被硬性跳过。", 13, ink, false);
         label(options, "不点击普通“关闭”、无标识叉号或付款按钮。每次前台应用会话最多点击 5 次，重复点击间隔至少 250 毫秒。", 13, ink, false);
         LinearLayout stats = card(); label(stats, "本机记录", 20, ink, true);
         label(stats, "服务进程：" + (SkipService.connected ? "正在运行" : "系统显示已授权，但当前进程尚未确认连接"), 15, SkipService.connected ? teal : ink, true);
@@ -65,11 +71,19 @@ public final class MainActivity extends Activity {
         label(stats, "已发出 " + Store.prefs(this).getInt("count", 0) + " 次成功点击请求", 18, teal, true);
         label(stats, "包含模拟测试；请求成功不等于已确认广告消失。", 12, ink, false);
         long time = Store.prefs(this).getLong("last_time", 0);
-        if (time > 0) label(stats, "最近一次：" + DateFormat.getDateTimeInstance().format(new Date(time)) + "\n" + Store.prefs(this).getString("last_package", ""), 12, ink, false);
+        if (time > 0) label(stats, "最近一次：" + DateFormat.getDateTimeInstance().format(new Date(time)) + "\n"
+            + Store.prefs(this).getString("last_package", "") + "\n路径：" + Store.prefs(this).getString("last_path", "未知")
+            + " · 命中耗时 " + Store.prefs(this).getLong("last_elapsed", -1) + " ms", 12, ink, false);
         long diagTime = Store.prefs(this).getLong("diag_time", 0);
         if (diagTime > 0) label(stats, "最近诊断：" + DateFormat.getDateTimeInstance().format(new Date(diagTime)) + "\n"
             + Store.prefs(this).getString("diag_package", "") + "\n" + Store.prefs(this).getString("diag_result", ""), 12, ink, false);
-        label(body, "界面识别完全在本机进行，无联网权限，不截图、不上传屏幕内容。仅保存开关、应用选择、点击次数和最近一次应用包名与时间。\n\n当前为规则原型，尚未承诺第三方 App 的兼容率；图片广告、强制倒计时和没有可读按钮的广告可能无法处理。", 13, ink, false);
+        button(stats, "导出诊断（发送前可检查）", () -> exportDiagnostics());
+        LinearLayout feedback = card(); label(feedback, "分享与反馈", 20, ink, true);
+        label(feedback, "轻跳没有联网权限。以下操作会调用系统分享页或浏览器，由你决定发送目标。", 13, ink, false);
+        button(feedback, "分享轻跳下载地址", () -> shareApp());
+        button(feedback, "在 GitHub 反馈问题", () -> openUrl(REPOSITORY + "/issues/new/choose"));
+        button(feedback, "查看隐私说明", () -> openUrl(REPOSITORY + "/blob/main/docs/PRIVACY.md"));
+        label(body, "界面识别完全在本机进行，无联网权限，不截图、不上传屏幕内容。仅保存开关、应用选择、点击次数和最近诊断。只有你主动使用系统分享页时，所选目标应用才会收到分享文字。\n\n当前仍是测试版，尚未承诺第三方 App 的兼容率；图片广告、强制倒计时和没有可读按钮的广告可能无法处理。", 13, ink, false);
     }
     private boolean serviceEnabled() {
         if (SkipService.connected) return true;
@@ -85,7 +99,7 @@ public final class MainActivity extends Activity {
     }
     private void disclosure() {
         new AlertDialog.Builder(this).setTitle("开启前请了解")
-            .setMessage("轻跳使用无障碍权限读取所选应用的界面控件文字，并代表你点击匹配的广告跳过或关闭按钮。\n\n识别只在本机运行，不联网、不截图、不保存界面文字；只保存点击统计和最近一次应用包名与时间。规则可能漏识别或误判。你可以取消某个应用、关闭首页总开关，或在系统设置撤销权限。\n\n同意后会打开系统无障碍设置，请找到“轻跳 · 自动跳过”手动启用。")
+            .setMessage("轻跳使用无障碍权限读取你所选应用公开的界面控件文字、控件 ID 和位置，并代表你点击符合固定规则的广告跳过或关闭按钮。\n\n识别只在本机运行，不联网、不截图、不保存页面正文或控件文字；只保存开关、所选应用包名、点击统计和最近诊断。规则可能漏识别或误判。你可以取消某个应用、关闭首页总开关，或在系统设置撤销权限。\n\n同意后会打开系统无障碍设置，请找到“轻跳 · 自动跳过”手动启用。")
             .setNegativeButton("暂不开启", null).setPositiveButton("同意并前往设置", (d, w) -> {
                 Store.prefs(this).edit().putBoolean("consent", true).putBoolean("enabled", true).apply();
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
@@ -104,21 +118,68 @@ public final class MainActivity extends Activity {
         for (String pkg : selected) if (!labels.containsKey(pkg)) labels.put(pkg, "未找到启动入口");
         List<String> packages = new ArrayList<>(labels.keySet());
         Collections.sort(packages, (a,b) -> labels.get(a).compareToIgnoreCase(labels.get(b)));
-        String[] items = new String[packages.size()]; boolean[] checks = new boolean[items.length];
-        for (int i=0; i<items.length; i++) { String pkg=packages.get(i); items[i]=labels.get(pkg)+"\n"+pkg; checks[i]=selected.contains(pkg); }
+        Set<String> draft = new HashSet<>(selected);
+        List<String> visiblePackages = new ArrayList<>();
+        LinearLayout picker = new LinearLayout(this); picker.setOrientation(LinearLayout.VERTICAL);
+        picker.setPadding(dp(18), dp(4), dp(18), 0);
+        EditText search = new EditText(this); search.setHint("搜索应用名称或包名"); search.setSingleLine(true); picker.addView(search);
+        TextView count = new TextView(this); count.setTextSize(13); count.setTextColor(ink); count.setPadding(0, dp(8), 0, dp(4)); picker.addView(count);
+        ListView list = new ListView(this); list.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
+        picker.addView(list, new LinearLayout.LayoutParams(-1, dp(420)));
+        Runnable refresh = () -> {
+            String query = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+            visiblePackages.clear();
+            List<String> rows = new ArrayList<>();
+            for (String pkg : packages) {
+                String appLabel = labels.get(pkg);
+                if (!query.isEmpty() && !appLabel.toLowerCase(Locale.ROOT).contains(query) && !pkg.toLowerCase(Locale.ROOT).contains(query)) continue;
+                visiblePackages.add(pkg); rows.add(appLabel + "\n" + pkg);
+            }
+            list.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_multiple_choice, rows));
+            for (int i = 0; i < visiblePackages.size(); i++) list.setItemChecked(i, draft.contains(visiblePackages.get(i)));
+            count.setText("已选择 " + draft.size() + " 个 · 当前显示 " + visiblePackages.size() + " 个");
+        };
+        list.setOnItemClickListener((parent, view, position, id) -> {
+            String pkg = visiblePackages.get(position);
+            if (list.isItemChecked(position)) draft.add(pkg); else draft.remove(pkg);
+            count.setText("已选择 " + draft.size() + " 个 · 当前显示 " + visiblePackages.size() + " 个");
+        });
+        search.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) { refresh.run(); }
+            public void afterTextChanged(Editable s) {}
+        });
+        refresh.run();
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("只在选中的应用内处理")
-            .setMultiChoiceItems(items, checks, (d,index,checked) -> {
-                if (checked) selected.add(packages.get(index)); else selected.remove(packages.get(index));
-            })
+            .setView(picker).setNeutralButton("清空选择", null)
             .setNegativeButton("取消", null).setPositiveButton("保存", null).create();
-        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            Set<String> snapshot = new HashSet<>(selected);
-            boolean saved = Store.prefs(this).edit().putStringSet("apps", snapshot).commit();
-            if (!saved) { Toast.makeText(this, "保存失败，请重试", Toast.LENGTH_LONG).show(); return; }
-            dialog.dismiss();
-            body.postDelayed(() -> { render(); Toast.makeText(this, "已保存 " + snapshot.size() + " 个应用", Toast.LENGTH_SHORT).show(); }, 120);
-        }));
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                Set<String> snapshot = new HashSet<>(draft);
+                boolean saved = Store.prefs(this).edit().putStringSet("apps", snapshot).commit();
+                if (!saved) { Toast.makeText(this, "保存失败，请重试", Toast.LENGTH_LONG).show(); return; }
+                dialog.dismiss();
+                body.postDelayed(() -> { render(); Toast.makeText(this, "已保存 " + snapshot.size() + " 个应用", Toast.LENGTH_SHORT).show(); }, 120);
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> { draft.clear(); refresh.run(); });
+        });
         dialog.show();
+    }
+    private void shareApp() {
+        Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, "轻跳 · Android 开屏广告跳过助手")
+            .putExtra(Intent.EXTRA_TEXT, "轻跳是一款本地运行、无需 Root 的 Android 开屏广告跳过助手。下载与说明：" + RELEASES);
+        startActivity(Intent.createChooser(send, "分享轻跳"));
+    }
+    private void exportDiagnostics() {
+        Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, "轻跳 0.3.0-beta.1 诊断")
+            .putExtra(Intent.EXTRA_TEXT, Store.exportText(this, serviceEnabled()));
+        startActivity(Intent.createChooser(send, "导出诊断；发送前请检查内容"));
+    }
+    private void openUrl(String url) {
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
+        catch (Exception e) { Toast.makeText(this, "没有可打开链接的应用", Toast.LENGTH_LONG).show(); }
     }
     private LinearLayout card() {
         LinearLayout view = new LinearLayout(this); view.setOrientation(LinearLayout.VERTICAL); view.setPadding(dp(18),dp(14),dp(18),dp(18));

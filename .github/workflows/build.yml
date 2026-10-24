@@ -1,0 +1,40 @@
+name: Android build and rule tests
+
+on:
+  push:
+    branches: [main, v0.3-product-beta]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        shell: pwsh
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build, test, align and verify APK
+        shell: pwsh
+        run: .\build.ps1 -Sdk $env:ANDROID_HOME -Jdk $env:JAVA_HOME -Platform android-35 -BuildTools 35.0.0
+
+      - name: Upload unsigned-for-store beta artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qing-tiao-beta-debug-signed
+          path: build/ad-skip-assistant-debug.apk
+          if-no-files-found: error
+          retention-days: 14
