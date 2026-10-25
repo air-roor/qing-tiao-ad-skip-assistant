@@ -1,0 +1,5 @@
+# Replace this placeholder with a domain you control. Keep Node bound to loopback.
+beta.example.com {
+    reverse_proxy 127.0.0.1:3887
+    # Access logging is intentionally not enabled here.
+}

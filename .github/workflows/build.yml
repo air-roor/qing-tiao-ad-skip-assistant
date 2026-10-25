@@ -10,6 +10,17 @@ permissions:
   contents: read
 
 jobs:
+  console:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test download tracking, feedback, admin auth and retention
+        run: node --test --test-timeout=20000 console/test/console.test.mjs
+
   build:
     runs-on: windows-latest
     timeout-minutes: 20

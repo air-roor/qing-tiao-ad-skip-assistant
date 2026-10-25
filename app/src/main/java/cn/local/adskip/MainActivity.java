@@ -20,7 +20,8 @@ import android.widget.*;
 import java.util.*;
 
 public final class MainActivity extends Activity {
-    static final String VERSION = "0.3.0-beta.5";
+    static final String VERSION = "0.3.0-beta.6";
+    private static final String BETA_NOTICE = "当前为免费公测。正式收费后，所有用户（包括参加过免费公测的用户）均需登录账号并购买使用权益，公测不赠送永久免费权益。\n\n收费日期与最终价格将提前公告，当前暂不收款。";
     private static final String REPOSITORY = "https://github.com/air-roor/qing-tiao-ad-skip-assistant";
     private static final String RELEASES = REPOSITORY + "/releases/tag/v" + VERSION;
     private Ui ui;
@@ -38,6 +39,7 @@ public final class MainActivity extends Activity {
     private Button saveButton;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private boolean displayedConnection;
+    private boolean trialDialogVisible;
     private final Runnable connectionRefresh = new Runnable() {
         @Override public void run() {
             if (isFinishing() || isDestroyed()) return;
@@ -56,7 +58,7 @@ public final class MainActivity extends Activity {
             ArrayList<String> restored=state.getStringArrayList("draft"); if(restored!=null) draftApps=new HashSet<>(restored);
         }
     }
-    @Override public void onResume() { super.onResume(); render(); uiHandler.removeCallbacks(connectionRefresh); uiHandler.postDelayed(connectionRefresh,1000); }
+    @Override public void onResume() { super.onResume(); render(); uiHandler.removeCallbacks(connectionRefresh); uiHandler.postDelayed(connectionRefresh,1000); if(!Store.prefs(this).getBoolean("beta_terms_v1",false)) trialTerms(true); }
     @Override public void onPause() { uiHandler.removeCallbacks(connectionRefresh); super.onPause(); }
     @Override protected void onSaveInstanceState(Bundle state) {
         state.putString("screen",screen);state.putString("query",appQuery);state.putString("feedbackApp",feedbackApp);
@@ -159,6 +161,13 @@ public final class MainActivity extends Activity {
                 try{startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));}catch(Exception e){toast("请在系统设置中手动开启无障碍服务");}
             }).create();dialog.setOnCancelListener(d->render());dialog.show();
     }
+    private void trialTerms(boolean firstRun){
+        if(trialDialogVisible)return;trialDialogVisible=true;
+        AlertDialog.Builder builder=new AlertDialog.Builder(this).setTitle("免费公测与后续收费").setMessage(BETA_NOTICE)
+            .setPositiveButton(firstRun?"了解，参加公测":"我已了解",(d,w)->Store.prefs(this).edit().putBoolean("beta_terms_v1",true).apply());
+        if(firstRun)builder.setNegativeButton("暂不参加",(d,w)->finish());
+        AlertDialog dialog=builder.create();dialog.setCancelable(!firstRun);dialog.setOnDismissListener(d->trialDialogVisible=false);dialog.show();
+    }
     private void loadApps(){
         if(loadingApps||appsLoaded)return;loadingApps=true;
         new Thread(()->{
@@ -230,7 +239,9 @@ public final class MainActivity extends Activity {
     }
     private void renderMe(){
         body=scrollBody();pageTitle(body,"我的轻跳","专注当下，让打扰留在身后。");
-        LinearLayout beta=ui.card(body);beta.setBackground(ui.panel());beta.addView(ui.chip("免费公测 · 无需登录"));ui.gap(beta,14);beta.addView(ui.heading("一起让轻跳更好用",20));ui.gap(beta,8);beta.addView(ui.text("遇到漏跳、速度慢或服务关闭？\n告诉我们，它会成为下一次改进的起点。",14,ui.muted,false));ui.gap(beta,16);ui.fullButton(beta,"填写公测反馈",true,()->go("feedback"));
+        LinearLayout beta=ui.card(body);beta.setBackground(ui.panel());beta.addView(ui.chip("免费公测 · 正式版需付费"));ui.gap(beta,14);beta.addView(ui.heading("一起让轻跳更好用",20));ui.gap(beta,8);beta.addView(ui.text("当前免费收集兼容反馈。正式收费后，包括公测用户在内，均需登录账号并购买使用权益。公测不赠送永久免费权益。",14,ui.muted,false));ui.gap(beta,16);ui.fullButton(beta,"填写公测反馈",true,()->go("feedback"));
+        ui.action(beta,"info","公测与收费安排","查看免费测试和后续购买说明",()->trialTerms(false));
+        if(!BuildConfig.PUBLIC_SITE.isEmpty())ui.action(beta,"chat","网页反馈（无需 GitHub 账号）","浏览器打开，确认后主动提交",()->openUrl(BuildConfig.PUBLIC_SITE+"/feedback"));
         section(body,"使用偏好");LinearLayout options=ui.card(body);LinearLayout toggle=ui.row();LinearLayout copy=ui.column();copy.addView(ui.text("关闭广告弹窗",15,ui.ink,true));ui.gap(copy,5);copy.addView(ui.text("仅处理明确标注的“关闭广告”按钮",12,ui.muted,false));toggle.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
         Switch popups=new Switch(this);popups.setContentDescription("处理明确关闭广告按钮");popups.setThumbTintList(ui.checks());popups.setMinimumHeight(ui.dp(48));popups.setChecked(Store.prefs(this).getBoolean("popups",true));toggle.addView(popups);popups.setOnCheckedChangeListener((v,value)->Store.prefs(this).edit().putBoolean("popups",value).apply());options.addView(toggle);ui.divider(options);
         ui.action(options,"play","模拟广告测试","看看自动跳过是否正常",()->startActivity(new Intent(this,DemoActivity.class)));ui.divider(options);
@@ -239,7 +250,7 @@ public final class MainActivity extends Activity {
         ui.action(records,"chart","查看最近诊断",SkipService.connected?"服务已连接 · 本机处理":"服务未连接 · 请检查系统授权",()->showDiagnostics());ui.divider(records);
         ui.action(records,"share","导出诊断","预览、编辑后再主动分享",()->{feedbackPreview=Store.exportText(this,serviceEnabled());feedbackId="diagnostic";go("preview");});
         section(body,"关于轻跳");LinearLayout about=ui.card(body);
-        ui.action(about,"share","分享轻跳","把少一点打扰，分享给朋友",()->shareText("轻跳 · 开屏广告跳过助手","轻跳免费公测中，无需 Root、本机识别。下载与说明："+RELEASES));ui.divider(about);
+        ui.action(about,"share","分享轻跳","把少一点打扰，分享给朋友",()->shareText("轻跳 · 开屏广告跳过助手","轻跳目前免费公测，无需 Root、本机识别。正式收费后，公测用户也需登录并购买，不赠送永久免费权益。下载与说明："+(BuildConfig.PUBLIC_SITE.isEmpty()?RELEASES:BuildConfig.PUBLIC_SITE+"/?channel=share")));ui.divider(about);
         ui.action(about,"shield","隐私与权限","无网络权限 · 不截图 · 不上传页面",()->openUrl(REPOSITORY+"/blob/main/docs/PRIVACY.md"));ui.divider(about);
         ui.action(about,"info","版本与公测计划","v"+VERSION+" · 账号与永久权益规划",()->openUrl(REPOSITORY+"/blob/main/docs/BETA_FEEDBACK_AND_ACCOUNT_PLAN.md"));
         TextView footer=ui.text("轻跳 QingTiao\n无法识别时，保持原样。",12,ui.muted,false);footer.setGravity(Gravity.CENTER);ui.gap(body,6);body.addView(footer);

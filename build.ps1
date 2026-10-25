@@ -2,7 +2,8 @@ param(
     [string]$Sdk = "$env:LOCALAPPDATA\Android\Sdk",
     [string]$Jdk = "$env:USERPROFILE\.jdks\microsoft-jdk-21",
     [string]$Platform = 'android-36.1',
-    [string]$BuildTools = '36.1.0'
+    [string]$BuildTools = '36.1.0',
+    [string]$PublicSite = ''
 )
 $ErrorActionPreference = 'Stop'
 $project = $PSScriptRoot
@@ -24,8 +25,17 @@ function Run([string]$File, [string[]]$Arguments) {
 $run = Join-Path $out ('run-' + [DateTime]::Now.ToString('yyyyMMdd-HHmmss-fff'))
 foreach($part in @('classes','generated','dex','tests')) { New-Item -ItemType Directory -Force -Path (Join-Path $run $part) | Out-Null }
 $source = Join-Path $project 'app\src\main'
+$publicOrigin = ''
+if ($PublicSite) {
+    $siteUri = [Uri]$PublicSite
+    if (!$siteUri.IsAbsoluteUri -or $siteUri.Scheme -ne 'https' -or $siteUri.UserInfo -or $siteUri.Query -or $siteUri.Fragment -or $siteUri.AbsolutePath -ne '/') { throw 'PublicSite must be an HTTPS origin without a path, credentials, query or fragment.' }
+    $publicOrigin = $siteUri.GetLeftPart([UriPartial]::Authority)
+}
+$configDir = Join-Path $run 'generated\cn\local\adskip'
+New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+[IO.File]::WriteAllText((Join-Path $configDir 'BuildConfig.java'), ('package cn.local.adskip; final class BuildConfig { static final String PUBLIC_SITE = "' + $publicOrigin + '"; }'), (New-Object Text.UTF8Encoding($false)))
 Run "$bt\aapt2.exe" @('compile','--dir',"$source\res",'-o',"$run\resources.zip")
-Run "$bt\aapt2.exe" @('link','-o',"$run\base.apk",'-I',$androidJar,'--manifest',"$source\AndroidManifest.xml",'--java',"$run\generated",'--version-code','16','--version-name','0.3.0-beta.5',"$run\resources.zip")
+Run "$bt\aapt2.exe" @('link','-o',"$run\base.apk",'-I',$androidJar,'--manifest',"$source\AndroidManifest.xml",'--java',"$run\generated",'--version-code','17','--version-name','0.3.0-beta.6',"$run\resources.zip")
 $sources = @((Get-ChildItem "$source\java","$run\generated" -Recurse -Filter '*.java').FullName)
 Run $javac (@('-encoding','UTF-8','-source','8','-target','8','-classpath',$androidJar,'-d',"$run\classes") + $sources)
 Run $javac @('-encoding','UTF-8','-d',"$run\tests","$source\java\cn\local\adskip\Rules.java","$source\java\cn\local\adskip\Feedback.java","$project\tests\RulesTest.java")
