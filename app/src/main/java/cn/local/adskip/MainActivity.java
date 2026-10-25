@@ -20,7 +20,7 @@ import android.widget.*;
 import java.util.*;
 
 public final class MainActivity extends Activity {
-    static final String VERSION = "0.3.0-beta.4";
+    static final String VERSION = "0.3.0-beta.5";
     private static final String REPOSITORY = "https://github.com/air-roor/qing-tiao-ad-skip-assistant";
     private static final String RELEASES = REPOSITORY + "/releases/tag/v" + VERSION;
     private Ui ui;
@@ -97,51 +97,53 @@ public final class MainActivity extends Activity {
     }
     private void renderHome() {
         body=scrollBody();
-        LinearLayout brand=ui.row();ImageView leaf=new ImageView(this);leaf.setImageDrawable(new Ui.Glyph("leaf",ui.primary));leaf.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        brand.addView(leaf,new LinearLayout.LayoutParams(ui.dp(28),ui.dp(28)));
-        TextView title=ui.heading("轻跳",24);LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,-2,1);tp.leftMargin=ui.dp(10);brand.addView(title,tp);
-        brand.addView(ui.chip("免费公测"));body.addView(brand);ui.gap(body,22);
+        LinearLayout brand=ui.row();ImageView logo=new ImageView(this);logo.setImageDrawable(new Ui.Glyph("bolt",ui.primary));logo.setPadding(ui.dp(10),ui.dp(10),ui.dp(10),ui.dp(10));logo.setBackground(ui.outline(ui.soft,14,ui.line));logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        brand.addView(logo,new LinearLayout.LayoutParams(ui.dp(44),ui.dp(44)));
+        LinearLayout wordmark=ui.column();wordmark.addView(ui.heading("轻跳",23));ui.gap(wordmark,4);wordmark.addView(ui.mono("LESS NOISE. MORE FOCUS.",9,ui.muted));
+        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,-2,1);tp.leftMargin=ui.dp(12);brand.addView(wordmark,tp);brand.addView(ui.chip("免费公测"));body.addView(brand);ui.gap(body,22);
         boolean enabled=Store.prefs(this).getBoolean("enabled",false),access=serviceEnabled();int selected=Store.apps(this).size();
         boolean ready=enabled&&access&&SkipService.connected&&selected>0;
-        LinearLayout hero=ui.card(body);hero.setBackground(ui.shape(ui.hero,28));hero.setPadding(ui.dp(22),ui.dp(22),ui.dp(22),ui.dp(22));
-        LinearLayout upper=ui.row();LinearLayout copy=ui.column();upper.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
-        copy.addView(ui.text("少一点打扰",13,ui.onHero,true));ui.gap(copy,10);
         String state=!enabled?"轻跳已暂停":!access?"还差一步，就绪":!SkipService.connected?"等待服务连接":selected==0?"选择你的应用":"轻跳正在守候";
-        copy.addView(ui.text(state,24,ui.onHero,true));ui.gap(copy,10);
-        copy.addView(ui.text(ready?"打开所选应用，自动寻找跳过按钮。":!enabled?"随时开启，把时间留给喜欢的事。":!access?"开启无障碍权限，让轻跳为你跳过广告。":!SkipService.connected?"系统已授权，服务尚未连接。":"只在你选择的应用中自动跳过。",13,ui.onHero,false));
-        upper.addView(new Ui.CalmArt(ui),new LinearLayout.LayoutParams(ui.dp(86),ui.dp(106)));hero.addView(upper);ui.gap(hero,18);
-        LinearLayout toggleRow=ui.row();toggleRow.addView(ui.text("自动跳过",15,ui.onHero,true),new LinearLayout.LayoutParams(0,-2,1));
-        Switch master=new Switch(this);master.setContentDescription("自动跳过广告总开关");master.setChecked(enabled);master.setThumbTintList(ui.checks());master.setMinimumHeight(ui.dp(48));master.setMinimumWidth(ui.dp(56));toggleRow.addView(master);
-        master.setOnCheckedChangeListener((b,checked)->{if(checked&&!Store.prefs(this).getBoolean("consent",false)){disclosure();}else{Store.prefs(this).edit().putBoolean("enabled",checked).apply();render();}});
-        hero.addView(toggleRow);
-        if(enabled&&(!access||!SkipService.connected||selected==0)){ui.gap(hero,10);ui.fullButton(hero,!access?"开启无障碍权限":!SkipService.connected?"查看服务设置":"选择应用",true,()->{if(!access||!SkipService.connected)disclosure();else go("apps");});}
-        LinearLayout metrics=ui.row();metric(metrics,String.valueOf(Store.prefs(this).getInt("count",0)),"次点击请求",false);metric(metrics,String.valueOf(selected),"个已选应用",true);body.addView(metrics);ui.gap(body,7);
-        body.addView(ui.text("点击请求包含模拟测试，不等于已确认广告消失。",11,ui.muted,false));ui.gap(body,22);
-        section(body,"准备好，即刻出发");LinearLayout setup=ui.card(body);
-        ui.action(setup,"shield","无障碍服务",SkipService.connected?"已连接 · 可以开始测试":access?"已授权 · 等待服务连接":"待开启 · 仅用于识别和点击广告",()->disclosure());ui.divider(setup);
-        ui.action(setup,"apps","管理应用","已选择 "+selected+" 个 · 自己决定处理范围",()->go("apps"));ui.divider(setup);
-        ui.action(setup,"play","试一下跳过效果","模拟广告与普通按钮保护测试",()->startActivity(new Intent(this,DemoActivity.class)));
-        LinearLayout note=ui.row();ImageView shield=new ImageView(this);shield.setImageDrawable(new Ui.Glyph("shield",ui.muted));shield.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);note.addView(shield,new LinearLayout.LayoutParams(ui.dp(17),ui.dp(17)));
-        TextView privacy=ui.text("本机识别  ·  无需 Root  ·  无网络权限",12,ui.muted,false);LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(-2,-2);pp.leftMargin=ui.dp(8);note.addView(privacy,pp);note.setGravity(Gravity.CENTER);body.addView(note);
+        String detail=ready?"打开所选应用，自动寻找跳过按钮。":!enabled?"开启自动跳过，让每一次打开更从容。":!access?"开启无障碍权限，让自动跳过开始工作。":!SkipService.connected?"权限已授予，正在等待系统连接服务。":"选择需要处理的应用，由你掌握范围。";
+        LinearLayout hero=ui.card(body);hero.setBackground(ui.panel());hero.setPadding(ui.dp(20),ui.dp(18),ui.dp(20),ui.dp(18));
+        LinearLayout status=ui.row();status.addView(ui.mono("AUTO SKIP",10,ui.primary),new LinearLayout.LayoutParams(0,-2,1));
+        TextView statusTag=ui.text(ready?"●  运行就绪":!enabled?"○  已暂停":"○  待就绪",11,ready?ui.primary:ui.warning,true);status.addView(statusTag);hero.addView(status);ui.gap(hero,15);
+        TextView stateTitle=ui.text(state,26,ui.ink,true);stateTitle.setGravity(Gravity.CENTER);hero.addView(stateTitle);ui.gap(hero,8);
+        TextView stateDetail=ui.text(detail,12,ui.muted,false);stateDetail.setGravity(Gravity.CENTER);hero.addView(stateDetail);
+        hero.addView(new Ui.CoreArt(ui,ready),new LinearLayout.LayoutParams(-1,ui.dp(176)));
+        ui.divider(hero);ui.gap(hero,12);LinearLayout toggleRow=ui.row();LinearLayout toggleCopy=ui.column();toggleCopy.addView(ui.text("自动跳过",15,ui.ink,true));ui.gap(toggleCopy,4);toggleCopy.addView(ui.text("仅在你选择的应用中生效",11,ui.muted,false));toggleRow.addView(toggleCopy,new LinearLayout.LayoutParams(0,-2,1));
+        Switch master=new Switch(this);master.setContentDescription("自动跳过广告总开关");master.setChecked(enabled);master.setThumbTintList(ui.checks());master.setTrackTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{ui.soft,ui.line}));master.setMinimumHeight(ui.dp(48));master.setMinimumWidth(ui.dp(56));toggleRow.addView(master);
+        master.setOnCheckedChangeListener((b,checked)->{if(checked&&!Store.prefs(this).getBoolean("consent",false)){disclosure();}else{Store.prefs(this).edit().putBoolean("enabled",checked).apply();render();}});hero.addView(toggleRow);
+        if(enabled&&(!access||!SkipService.connected||selected==0)){ui.gap(hero,12);ui.fullButton(hero,!access?"开启无障碍权限":!SkipService.connected?"查看服务设置":"选择应用",true,()->{if(!access||!SkipService.connected)disclosure();else go("apps");});}
+        LinearLayout metrics=ui.row();metric(metrics,String.valueOf(Store.prefs(this).getInt("count",0)),"点击请求","bolt",false);metric(metrics,String.valueOf(selected),"已选应用","apps",true);body.addView(metrics);ui.gap(body,10);
+        body.addView(ui.text("点击请求包含模拟测试，不等于已确认广告消失。",11,ui.muted,false));ui.gap(body,20);
+        Button demo=ui.button("体验自动跳过",true,()->startActivity(new Intent(this,DemoActivity.class)));Ui.Glyph play=new Ui.Glyph("play",ui.bg);play.setBounds(0,0,ui.dp(19),ui.dp(19));demo.setCompoundDrawables(play,null,null,null);demo.setCompoundDrawablePadding(ui.dp(10));body.addView(demo,new LinearLayout.LayoutParams(-1,-2));ui.gap(body,24);
+        section(body,"运行配置");LinearLayout setup=ui.card(body);
+        ui.action(setup,"shield","无障碍服务",SkipService.connected?"已连接 · 自动跳过已就绪":access?"已授权 · 等待服务连接":"待开启 · 查看权限用途",()->disclosure());ui.divider(setup);
+        ui.action(setup,"apps","管理应用","已选择 "+selected+" 个 · 自定义处理范围",()->go("apps"));
+        TextView privacy=ui.text("本机识别  /  无需 Root  /  无网络权限",11,ui.muted,false);privacy.setGravity(Gravity.CENTER);body.addView(privacy);ui.gap(body,6);
     }
-    private void metric(LinearLayout parent,String value,String label,boolean second){
-        LinearLayout cell=ui.column();cell.setPadding(ui.dp(18),ui.dp(16),ui.dp(18),ui.dp(16));cell.setBackground(ui.shape(ui.surface,22));
-        cell.addView(ui.text(value,28,ui.ink,true));ui.gap(cell,6);cell.addView(ui.text(label,12,ui.muted,false));
+    private void metric(LinearLayout parent,String value,String label,String icon,boolean second){
+        LinearLayout cell=ui.column();cell.setPadding(ui.dp(16),ui.dp(15),ui.dp(16),ui.dp(15));cell.setBackground(ui.outline(ui.surface,18,ui.line));
+        LinearLayout top=ui.row();top.addView(ui.text(label,12,ui.muted,false),new LinearLayout.LayoutParams(0,-2,1));ImageView glyph=new ImageView(this);glyph.setImageDrawable(new Ui.Glyph(icon,ui.primary));glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);top.addView(glyph,new LinearLayout.LayoutParams(ui.dp(16),ui.dp(16)));cell.addView(top);ui.gap(cell,9);
+        TextView number=ui.mono(value,30,ui.ink);number.setLetterSpacing(-.04f);cell.addView(number);
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);if(second)p.leftMargin=ui.dp(12);parent.addView(cell,p);
     }
-    private void section(LinearLayout p,String title){p.addView(ui.heading(title,17));ui.gap(p,12);}
+    private void section(LinearLayout p,String title){
+        LinearLayout row=ui.row();row.addView(ui.heading(title,16),new LinearLayout.LayoutParams(0,-2,1));TextView mark=ui.mono("Q /",10,ui.muted);mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);row.addView(mark);p.addView(row);ui.gap(p,12);
+    }
     private void navigation(){
         boolean compact=getResources().getConfiguration().screenHeightDp<500;
-        LinearLayout nav=ui.row();nav.setPadding(ui.dp(12),ui.dp(5),ui.dp(12),ui.dp(7));nav.setBackgroundColor(ui.surface);
-        String[] labels={"首页","应用","我的"},destinations={"home","apps","me"},icons={"home","apps","user"};
+        LinearLayout nav=ui.row();nav.setPadding(ui.dp(5),ui.dp(5),ui.dp(5),ui.dp(5));nav.setBackground(ui.outline(ui.surface,20,ui.line));
+        String[] labels={"首页","应用","我的"},destinations={"home","apps","me"},icons={"bolt","apps","user"};
         for(int i=0;i<3;i++){
             final String destination=destinations[i];boolean selected=screen.equals(destination);
-            Button b=ui.button(labels[i],false,()->go(destination));b.setTextSize(12);b.setTextColor(selected?ui.primary:ui.muted);
-            b.setBackground(ui.ripple(selected?ui.soft:ui.surface,20));b.setPadding(ui.dp(4),ui.dp(8),ui.dp(4),ui.dp(8));
-            if(!compact){Ui.Glyph icon=new Ui.Glyph(icons[i],selected?ui.primary:ui.muted);icon.setBounds(0,0,ui.dp(23),ui.dp(23));b.setCompoundDrawables(null,icon,null,null);b.setCompoundDrawablePadding(ui.dp(5));}b.setSelected(selected);
-            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.leftMargin=ui.dp(5);p.rightMargin=ui.dp(5);nav.addView(b,p);
+            Button b=ui.button(labels[i],false,()->go(destination));b.setTextSize(11);b.setTextColor(selected?ui.primary:ui.muted);
+            b.setBackground(ui.ripple(selected?ui.soft:android.graphics.Color.TRANSPARENT,15));b.setPadding(ui.dp(4),ui.dp(compact?8:7),ui.dp(4),ui.dp(compact?8:7));
+            if(!compact){Ui.Glyph icon=new Ui.Glyph(icons[i],selected?ui.primary:ui.muted);icon.setBounds(0,0,ui.dp(20),ui.dp(20));b.setCompoundDrawables(null,icon,null,null);b.setCompoundDrawablePadding(ui.dp(4));}b.setSelected(selected);
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.leftMargin=ui.dp(3);p.rightMargin=ui.dp(3);nav.addView(b,p);
         }
-        shell.addView(nav,new LinearLayout.LayoutParams(-1,-2));
+        LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(-1,-2);np.leftMargin=ui.dp(20);np.rightMargin=ui.dp(20);np.topMargin=ui.dp(6);np.bottomMargin=ui.dp(compact?4:10);shell.addView(nav,np);
     }
     private boolean serviceEnabled(){
         if(SkipService.connected)return true;AccessibilityManager manager=(AccessibilityManager)getSystemService(ACCESSIBILITY_SERVICE);
@@ -189,7 +191,7 @@ public final class MainActivity extends Activity {
         if(compact){LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,2);cp.leftMargin=ui.dp(16);filters.addView(selectionCount,cp);}
         else{ui.gap(head,12);head.addView(selectionCount);}
         FrameLayout listFrame=new FrameLayout(this);content.addView(listFrame,new LinearLayout.LayoutParams(-1,0,1));
-        ListView list=new ListView(this);list.setDivider(null);list.setClipToPadding(false);list.setPadding(ui.dp(20),ui.dp(4),ui.dp(20),ui.dp(8));list.setSelector(ui.ripple(ui.surface,18));
+        ListView list=new ListView(this);list.setDivider(new android.graphics.drawable.ColorDrawable(ui.bg));list.setDividerHeight(ui.dp(8));list.setClipToPadding(false);list.setPadding(ui.dp(20),ui.dp(4),ui.dp(20),ui.dp(8));list.setSelector(ui.ripple(ui.surface,18));
         listFrame.addView(list,new FrameLayout.LayoutParams(-1,-1));TextView empty=ui.text(appsLoaded?"没有找到应用\n试试其他名称或切换筛选":"正在读取应用列表…",15,ui.muted,false);empty.setGravity(Gravity.CENTER);listFrame.addView(empty,new FrameLayout.LayoutParams(-1,-1));list.setEmptyView(empty);
         appAdapter=new AppAdapter();list.setAdapter(appAdapter);refreshApps();
         list.setOnItemClickListener((parent,v,position,id)->{String pkg=appAdapter.visible.get(position);if(!draftApps.add(pkg))draftApps.remove(pkg);refreshApps();});
@@ -216,19 +218,19 @@ public final class MainActivity extends Activity {
         @Override public View getView(int position,View recycled,ViewGroup parent){
             String pkg=visible.get(position);Holder h;
             if(recycled==null){
-                h=new Holder();h.row=ui.row();h.row.setMinimumHeight(ui.dp(78));h.row.setPadding(ui.dp(12),ui.dp(12),ui.dp(12),ui.dp(12));h.row.setBackground(ui.shape(ui.surface,16));
+                h=new Holder();h.row=ui.row();h.row.setMinimumHeight(ui.dp(78));h.row.setPadding(ui.dp(12),ui.dp(12),ui.dp(12),ui.dp(12));h.row.setBackground(ui.outline(ui.surface,16,ui.line));
                 h.icon=new ImageView(MainActivity.this);h.icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);h.row.addView(h.icon,new LinearLayout.LayoutParams(ui.dp(40),ui.dp(40)));
                 LinearLayout copy=ui.column();h.name=ui.text("",15,ui.ink,true);h.name.setMaxLines(2);h.name.setEllipsize(TextUtils.TruncateAt.END);copy.addView(h.name);ui.gap(copy,5);h.pkg=ui.text("",11,ui.muted,false);h.pkg.setSingleLine(true);h.pkg.setEllipsize(TextUtils.TruncateAt.MIDDLE);copy.addView(h.pkg);
                 LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,1);cp.leftMargin=ui.dp(12);cp.rightMargin=ui.dp(8);h.row.addView(copy,cp);copy.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
                 h.check=new CheckBox(MainActivity.this);h.check.setButtonTintList(ui.checks());h.check.setFocusable(false);h.check.setClickable(false);h.check.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);h.row.addView(h.check,new LinearLayout.LayoutParams(ui.dp(32),ui.dp(48)));h.row.setTag(h);
                 h.row.setAccessibilityDelegate(new View.AccessibilityDelegate(){@Override public void onInitializeAccessibilityNodeInfo(View host,android.view.accessibility.AccessibilityNodeInfo info){super.onInitializeAccessibilityNodeInfo(host,info);Holder bound=(Holder)host.getTag();info.setClassName(CheckBox.class.getName());info.setCheckable(true);info.setChecked(bound.check.isChecked());}});
             }else h=(Holder)recycled.getTag();
-            Drawable drawable=appIcons.get(pkg);h.icon.setImageDrawable(drawable==null?new Ui.Glyph("apps",ui.primary):drawable);h.name.setText(appNames.get(pkg));h.pkg.setText(pkg);h.check.setChecked(draftApps.contains(pkg));h.row.setContentDescription(appNames.get(pkg)+"，"+(draftApps.contains(pkg)?"已选择":"未选择"));return h.row;
+            Drawable drawable=appIcons.get(pkg);h.icon.setImageDrawable(drawable==null?new Ui.Glyph("apps",ui.primary):drawable);h.name.setText(appNames.get(pkg));h.pkg.setText(pkg);h.check.setChecked(draftApps.contains(pkg));h.row.setBackground(ui.outline(draftApps.contains(pkg)?ui.soft:ui.surface,16,draftApps.contains(pkg)?ui.primary:ui.line));h.row.setContentDescription(appNames.get(pkg)+"，"+(draftApps.contains(pkg)?"已选择":"未选择"));return h.row;
         }
     }
     private void renderMe(){
-        body=scrollBody();pageTitle(body,"我的轻跳","简单一点，也安心一点。");
-        LinearLayout beta=ui.card(body);beta.setBackground(ui.shape(ui.hero,24));beta.addView(ui.chip("免费公测 · 无需登录"));ui.gap(beta,14);beta.addView(ui.heading("一起让轻跳更好用",20));ui.gap(beta,8);beta.addView(ui.text("遇到漏跳、速度慢或服务关闭？\n告诉我们，它会成为下一次改进的起点。",14,ui.muted,false));ui.gap(beta,16);ui.fullButton(beta,"填写公测反馈",true,()->go("feedback"));
+        body=scrollBody();pageTitle(body,"我的轻跳","专注当下，让打扰留在身后。");
+        LinearLayout beta=ui.card(body);beta.setBackground(ui.panel());beta.addView(ui.chip("免费公测 · 无需登录"));ui.gap(beta,14);beta.addView(ui.heading("一起让轻跳更好用",20));ui.gap(beta,8);beta.addView(ui.text("遇到漏跳、速度慢或服务关闭？\n告诉我们，它会成为下一次改进的起点。",14,ui.muted,false));ui.gap(beta,16);ui.fullButton(beta,"填写公测反馈",true,()->go("feedback"));
         section(body,"使用偏好");LinearLayout options=ui.card(body);LinearLayout toggle=ui.row();LinearLayout copy=ui.column();copy.addView(ui.text("关闭广告弹窗",15,ui.ink,true));ui.gap(copy,5);copy.addView(ui.text("仅处理明确标注的“关闭广告”按钮",12,ui.muted,false));toggle.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
         Switch popups=new Switch(this);popups.setContentDescription("处理明确关闭广告按钮");popups.setThumbTintList(ui.checks());popups.setMinimumHeight(ui.dp(48));popups.setChecked(Store.prefs(this).getBoolean("popups",true));toggle.addView(popups);popups.setOnCheckedChangeListener((v,value)->Store.prefs(this).edit().putBoolean("popups",value).apply());options.addView(toggle);ui.divider(options);
         ui.action(options,"play","模拟广告测试","看看自动跳过是否正常",()->startActivity(new Intent(this,DemoActivity.class)));ui.divider(options);
