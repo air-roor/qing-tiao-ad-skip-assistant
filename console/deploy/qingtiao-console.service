@@ -1,0 +1,22 @@
+[Unit]
+Description=QingTiao beta feedback and download console
+After=network.target
+
+[Service]
+Type=simple
+User=qingtiao
+Group=qingtiao
+WorkingDirectory=/opt/qingtiao/console
+EnvironmentFile=/etc/qingtiao-console.env
+ExecStart=/usr/bin/node server.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/qingtiao
+
+[Install]
+WantedBy=multi-user.target

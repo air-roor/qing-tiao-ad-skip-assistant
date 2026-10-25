@@ -34,7 +34,7 @@ final class Store {
         SharedPreferences p = prefs(c);
         long lastTime = p.getLong("last_time", 0), diagTime = p.getLong("diag_time", 0);
         return "轻跳诊断（用户主动导出）\n"
-            + "版本：" + MainActivity.VERSION + " (16)\n"
+            + "版本：" + MainActivity.VERSION + " (17)\n"
             + "设备：" + Build.MANUFACTURER + " " + Build.MODEL + "\n"
             + "系统：Android " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT + "\n"
             + "无障碍状态：" + (serviceEnabled ? "系统已授权或服务已连接" : "未授权") + "\n"

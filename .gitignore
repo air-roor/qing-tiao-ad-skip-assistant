@@ -11,3 +11,9 @@
 *.pem
 *.key
 *.apk
+/console/data/
+/console/backups/
+/console/.env*
+!/console/.env.example
+/console/*.log
+/console/node_modules/
