@@ -20,7 +20,7 @@ import android.widget.*;
 import java.util.*;
 
 public final class MainActivity extends Activity {
-    static final String VERSION = "0.3.0-beta.6";
+    static final String VERSION = "0.3.0-beta.7";
     private static final String BETA_NOTICE = "当前为免费公测。正式收费后，所有用户（包括参加过免费公测的用户）均需登录账号并购买使用权益，公测不赠送永久免费权益。\n\n收费日期与最终价格将提前公告，当前暂不收款。";
     private static final String REPOSITORY = "https://github.com/air-roor/qing-tiao-ad-skip-assistant";
     private static final String RELEASES = REPOSITORY + "/releases/tag/v" + VERSION;
@@ -37,6 +37,8 @@ public final class MainActivity extends Activity {
     private AppAdapter appAdapter;
     private TextView selectionCount;
     private Button saveButton;
+    private ListView appsList;
+    private int appsPosition, appsOffset;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private boolean displayedConnection;
     private boolean trialDialogVisible;
@@ -54,20 +56,25 @@ public final class MainActivity extends Activity {
             screen=state.getString("screen", "home"); appQuery=state.getString("query", "");
             feedbackApp=state.getString("feedbackApp", ""); feedbackDetail=state.getString("feedbackDetail", "");
             feedbackPreview=state.getString("preview", ""); feedbackId=state.getString("feedbackId", "");
+            appsPosition=state.getInt("appsPosition");appsOffset=state.getInt("appsOffset");
             categoryIndex=state.getInt("category"); includeDiagnostic=state.getBoolean("include", true); selectedOnly=state.getBoolean("selectedOnly");
             ArrayList<String> restored=state.getStringArrayList("draft"); if(restored!=null) draftApps=new HashSet<>(restored);
         }
     }
     @Override public void onResume() { super.onResume(); render(); uiHandler.removeCallbacks(connectionRefresh); uiHandler.postDelayed(connectionRefresh,1000); if(!Store.prefs(this).getBoolean("beta_terms_v1",false)) trialTerms(true); }
-    @Override public void onPause() { uiHandler.removeCallbacks(connectionRefresh); super.onPause(); }
+    @Override public void onPause() { rememberAppsScroll();uiHandler.removeCallbacks(connectionRefresh); super.onPause(); }
     @Override protected void onSaveInstanceState(Bundle state) {
+        rememberAppsScroll();state.putInt("appsPosition",appsPosition);state.putInt("appsOffset",appsOffset);
         state.putString("screen",screen);state.putString("query",appQuery);state.putString("feedbackApp",feedbackApp);
         state.putString("feedbackDetail",feedbackDetail);state.putString("preview",feedbackPreview);state.putString("feedbackId",feedbackId);
         state.putInt("category",categoryIndex);state.putBoolean("include",includeDiagnostic);state.putBoolean("selectedOnly",selectedOnly);
         if(draftApps!=null)state.putStringArrayList("draft",new ArrayList<>(draftApps));super.onSaveInstanceState(state);
     }
-    private void go(String destination) { hideKeyboard(); screen=destination; render(); }
+    private void rememberAppsScroll(){if(appsList!=null&&appsList.getChildCount()>0){appsPosition=appsList.getFirstVisiblePosition();appsOffset=appsList.getChildAt(0).getTop()-appsList.getPaddingTop();}}
+    private void resetAppsScroll(){appsList=null;appsPosition=0;appsOffset=0;}
+    private void go(String destination) { rememberAppsScroll();appsList=null;hideKeyboard();screen=destination;render(); }
     private void render() {
+        rememberAppsScroll();appsList=null;
         displayedConnection=SkipService.connected;
         ui=new Ui(this);getWindow().setStatusBarColor(ui.bg);getWindow().setNavigationBarColor(ui.surface);
         int flags=View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
@@ -116,11 +123,11 @@ public final class MainActivity extends Activity {
         ui.divider(hero);ui.gap(hero,12);LinearLayout toggleRow=ui.row();LinearLayout toggleCopy=ui.column();toggleCopy.addView(ui.text("自动跳过",15,ui.ink,true));ui.gap(toggleCopy,4);toggleCopy.addView(ui.text("仅在你选择的应用中生效",11,ui.muted,false));toggleRow.addView(toggleCopy,new LinearLayout.LayoutParams(0,-2,1));
         Switch master=new Switch(this);master.setContentDescription("自动跳过广告总开关");master.setChecked(enabled);master.setThumbTintList(ui.checks());master.setTrackTintList(new android.content.res.ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{ui.soft,ui.line}));master.setMinimumHeight(ui.dp(48));master.setMinimumWidth(ui.dp(56));toggleRow.addView(master);
         master.setOnCheckedChangeListener((b,checked)->{if(checked&&!Store.prefs(this).getBoolean("consent",false)){disclosure();}else{Store.prefs(this).edit().putBoolean("enabled",checked).apply();render();}});hero.addView(toggleRow);
-        if(enabled&&(!access||!SkipService.connected||selected==0)){ui.gap(hero,12);ui.fullButton(hero,!access?"开启无障碍权限":!SkipService.connected?"查看服务设置":"选择应用",true,()->{if(!access||!SkipService.connected)disclosure();else go("apps");});}
         LinearLayout metrics=ui.row();metric(metrics,String.valueOf(Store.prefs(this).getInt("count",0)),"点击请求","bolt",false);metric(metrics,String.valueOf(selected),"已选应用","apps",true);body.addView(metrics);ui.gap(body,10);
         body.addView(ui.text("点击请求包含模拟测试，不等于已确认广告消失。",11,ui.muted,false));ui.gap(body,20);
-        Button demo=ui.button("体验自动跳过",true,()->startActivity(new Intent(this,DemoActivity.class)));Ui.Glyph play=new Ui.Glyph("play",ui.bg);play.setBounds(0,0,ui.dp(19),ui.dp(19));demo.setCompoundDrawables(play,null,null,null);demo.setCompoundDrawablePadding(ui.dp(10));body.addView(demo,new LinearLayout.LayoutParams(-1,-2));ui.gap(body,24);
-        section(body,"运行配置");LinearLayout setup=ui.card(body);
+        String next=!enabled?"开启自动跳过":!access?"完成权限设置":!SkipService.connected?"检查服务连接":selected==0?"选择需要跳过的应用":"体验自动跳过";
+        Button demo=ui.button(next,true,()->{if(!enabled){if(Store.prefs(this).getBoolean("consent",false)){Store.prefs(this).edit().putBoolean("enabled",true).apply();render();}else disclosure();}else if(!access||!SkipService.connected){disclosure();}else if(selected==0){go("apps");}else startActivity(new Intent(this,DemoActivity.class));});Ui.Glyph play=new Ui.Glyph("play",ui.bg);play.setBounds(0,0,ui.dp(19),ui.dp(19));demo.setCompoundDrawables(play,null,null,null);demo.setCompoundDrawablePadding(ui.dp(10));body.addView(demo,new LinearLayout.LayoutParams(-1,-2));ui.gap(body,24);
+        section(body,"运行配置");LinearLayout setup=ui.card(body);int done=(enabled?1:0)+(access?1:0)+(SkipService.connected?1:0)+(selected>0?1:0);setup.addView(ui.text("已完成 "+done+" / 4 项准备",12,ready?ui.primary:ui.muted,true));ui.gap(setup,8);
         ui.action(setup,"shield","无障碍服务",SkipService.connected?"已连接 · 自动跳过已就绪":access?"已授权 · 等待服务连接":"待开启 · 查看权限用途",()->disclosure());ui.divider(setup);
         ui.action(setup,"apps","管理应用","已选择 "+selected+" 个 · 自定义处理范围",()->go("apps"));
         TextView privacy=ui.text("本机识别  /  无需 Root  /  无网络权限",11,ui.muted,false);privacy.setGravity(Gravity.CENTER);body.addView(privacy);ui.gap(body,6);
@@ -191,10 +198,10 @@ public final class MainActivity extends Activity {
         LinearLayout titleRow=ui.row();titleRow.addView(ui.heading("应用管理",compact?20:28),new LinearLayout.LayoutParams(compact?-2:0,-2,compact?0:1));
         EditText search=ui.field("搜索应用名称或包名",false);search.setContentDescription("搜索应用名称或包名");search.setText(appQuery);
         if(compact){LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(0,-2,1);qp.leftMargin=ui.dp(16);qp.rightMargin=ui.dp(12);titleRow.addView(search,qp);}
-        Button clear=ui.button("清空",false,()->new AlertDialog.Builder(this).setTitle("清空选择？").setMessage("这只会修改草稿，点击保存后才会生效。").setNegativeButton("取消",null).setPositiveButton("清空草稿",(d,w)->{draftApps.clear();refreshApps();}).show());titleRow.addView(clear);head.addView(titleRow);
-        if(!compact){ui.gap(head,8);head.addView(ui.text("只在你选择的应用中，轻轻跳过。",13,ui.muted,false));ui.gap(head,18);head.addView(search);}
+        Button clear=ui.button("清空选择",false,()->new AlertDialog.Builder(this).setTitle("清空选择？").setMessage("这只会修改草稿，点击保存后才会生效。").setNegativeButton("取消",null).setPositiveButton("清空草稿",(d,w)->{draftApps.clear();refreshApps();}).show());titleRow.addView(clear);head.addView(titleRow);
+        if(!compact){ui.gap(head,8);head.addView(ui.text("只在你选择的应用中，轻轻跳过。",13,ui.muted,false));ui.gap(head,18);LinearLayout searchRow=ui.row();searchRow.addView(search,new LinearLayout.LayoutParams(0,-2,1));Button resetQuery=ui.button("清除",false,()->search.setText(""));resetQuery.setContentDescription("清除搜索");LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-2,-2);rp.leftMargin=ui.dp(8);searchRow.addView(resetQuery,rp);head.addView(searchRow);}
         LinearLayout filters=ui.row();ui.gap(head,compact?4:10);head.addView(filters);
-        Button all=ui.button("全部应用",!selectedOnly,()->{selectedOnly=false;render();});Button picked=ui.button("已选择",selectedOnly,()->{selectedOnly=true;render();});
+        Button all=ui.button("全部应用",!selectedOnly,()->{selectedOnly=false;resetAppsScroll();render();});Button picked=ui.button("已选择",selectedOnly,()->{selectedOnly=true;resetAppsScroll();render();});
         filters.addView(all,new LinearLayout.LayoutParams(0,-2,1));LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(0,-2,1);fp.leftMargin=ui.dp(10);filters.addView(picked,fp);
         selectionCount=ui.text("",12,ui.muted,false);
         if(compact){LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,2);cp.leftMargin=ui.dp(16);filters.addView(selectionCount,cp);}
@@ -202,9 +209,10 @@ public final class MainActivity extends Activity {
         FrameLayout listFrame=new FrameLayout(this);content.addView(listFrame,new LinearLayout.LayoutParams(-1,0,1));
         ListView list=new ListView(this);list.setDivider(new android.graphics.drawable.ColorDrawable(ui.bg));list.setDividerHeight(ui.dp(8));list.setClipToPadding(false);list.setPadding(ui.dp(20),ui.dp(4),ui.dp(20),ui.dp(8));list.setSelector(ui.ripple(ui.surface,18));
         listFrame.addView(list,new FrameLayout.LayoutParams(-1,-1));TextView empty=ui.text(appsLoaded?"没有找到应用\n试试其他名称或切换筛选":"正在读取应用列表…",15,ui.muted,false);empty.setGravity(Gravity.CENTER);listFrame.addView(empty,new FrameLayout.LayoutParams(-1,-1));list.setEmptyView(empty);
-        appAdapter=new AppAdapter();list.setAdapter(appAdapter);refreshApps();
+        appsList=list;appAdapter=new AppAdapter();list.setAdapter(appAdapter);refreshApps();
+        final int restorePosition=appsPosition,restoreOffset=appsOffset;list.post(()->{if(appsList==list&&appAdapter.getCount()>0)list.setSelectionFromTop(Math.min(restorePosition,appAdapter.getCount()-1),restoreOffset);});
         list.setOnItemClickListener((parent,v,position,id)->{String pkg=appAdapter.visible.get(position);if(!draftApps.add(pkg))draftApps.remove(pkg);refreshApps();});
-        search.addTextChangedListener(watcher(value->{appQuery=value;refreshApps();}));
+        search.addTextChangedListener(watcher(value->{appQuery=value;appsPosition=0;appsOffset=0;refreshApps();if(appsList!=null)appsList.setSelection(0);}));
         LinearLayout footer=ui.row();footer.setPadding(ui.dp(20),ui.dp(10),ui.dp(20),ui.dp(10));footer.setBackgroundColor(ui.surface);
         Button cancel=ui.button("取消修改",false,()->{draftApps=Store.apps(this);refreshApps();toast("已恢复已保存的选择");});footer.addView(cancel,new LinearLayout.LayoutParams(0,-2,1));
         saveButton=ui.button("保存选择",true,()->saveApps());LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(0,-2,1.5f);sp.leftMargin=ui.dp(12);footer.addView(saveButton,sp);content.addView(footer);updateSelection();loadApps();
@@ -213,7 +221,7 @@ public final class MainActivity extends Activity {
     private void updateSelection(){
         if(selectionCount==null||draftApps==null)return;boolean dirty=!draftApps.equals(Store.apps(this));
         selectionCount.setText("已选择 "+draftApps.size()+" 个"+(dirty?"  ·  修改尚未保存":"  ·  已保存"));
-        if(saveButton!=null)saveButton.setText(dirty?"保存选择（"+draftApps.size()+"）":"已保存 "+draftApps.size()+" 个");
+        if(saveButton!=null){saveButton.setText(dirty?"保存选择（"+draftApps.size()+"）":"已保存 "+draftApps.size()+" 个");saveButton.setEnabled(dirty);saveButton.setAlpha(dirty?1f:.55f);}
     }
     private void saveApps(){
         if(!Store.prefs(this).edit().putStringSet("apps",new HashSet<>(draftApps)).commit()){toast("保存失败，请重试");return;}
@@ -264,10 +272,9 @@ public final class MainActivity extends Activity {
     private void renderFeedback(){
         backHeader("公测反馈",()->go("me"));body=scrollBody();pageTitle(body,"你的反馈，很有用","先在本机整理，检查后再发送。");
         LinearLayout types=ui.card(body);types.addView(ui.heading("遇到了什么问题？",16));ui.gap(types,10);
-        RadioGroup group=new RadioGroup(this);for(int i=0;i<Feedback.CATEGORIES.length;i++){
-            RadioButton choice=new RadioButton(this);choice.setId(3000+i);choice.setText(Feedback.CATEGORIES[i]);choice.setTextSize(14);choice.setTextColor(ui.ink);choice.setButtonTintList(ui.checks());choice.setMinHeight(ui.dp(48));group.addView(choice);}
-        group.check(3000+categoryIndex);group.setOnCheckedChangeListener((g,id)->categoryIndex=id-3000);types.addView(group);
-        body.addView(ui.heading("相关应用",15));ui.gap(body,8);EditText target=ui.field("例如：QQ 音乐，或填写包名",false);target.setFilters(new InputFilter[]{new InputFilter.LengthFilter(120)});target.setText(feedbackApp);target.setContentDescription("相关应用名称或包名");target.addTextChangedListener(watcher(v->feedbackApp=v));body.addView(target);ui.gap(body,18);
+        Spinner category=new Spinner(this,Spinner.MODE_DROPDOWN);category.setContentDescription("问题类型");category.setMinimumHeight(ui.dp(52));category.setPadding(ui.dp(12),ui.dp(8),ui.dp(12),ui.dp(8));category.setBackground(ui.outline(ui.surface,14,ui.line));category.setPopupBackgroundDrawable(ui.shape(ui.surface,14));
+        ArrayAdapter<String> categories=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,Feedback.CATEGORIES);category.setAdapter(categories);category.setSelection(categoryIndex);category.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onItemSelected(AdapterView<?> p,View v,int position,long id){categoryIndex=position;}public void onNothingSelected(AdapterView<?> p){}});types.addView(category,new LinearLayout.LayoutParams(-1,-2));
+        body.addView(ui.heading("相关应用",15));ui.gap(body,8);EditText target=ui.field("例如：QQ 音乐，或填写包名",false);target.setFilters(new InputFilter[]{new InputFilter.LengthFilter(120)});target.setText(feedbackApp);target.setContentDescription("相关应用名称或包名");target.addTextChangedListener(watcher(v->feedbackApp=v));body.addView(target);ui.gap(body,8);Button recent=ui.button("填入最近处理应用",false,()->{String pkg=Store.prefs(this).getString("last_package","");if(pkg.isEmpty()||pkg.equals(getPackageName())){toast("暂无真实应用处理记录，请手动填写");return;}String name=pkg;try{name=getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(pkg,0)).toString()+"（"+pkg+"）";}catch(Exception ignored){}target.setText(name);target.setSelection(target.length());});body.addView(recent);ui.gap(body,18);
         body.addView(ui.heading("发生了什么？",15));ui.gap(body,8);EditText detail=ui.field("第几次启动？广告按钮是什么样？\n请描述可以重复出现的操作。",true);detail.setFilters(new InputFilter[]{new InputFilter.LengthFilter(800)});detail.setText(feedbackDetail);detail.setContentDescription("问题描述");detail.addTextChangedListener(watcher(v->feedbackDetail=v));body.addView(detail);ui.gap(body,16);
         CheckBox diagnostic=new CheckBox(this);diagnostic.setText("附带本机诊断");diagnostic.setTextColor(ui.ink);diagnostic.setButtonTintList(ui.checks());diagnostic.setMinHeight(ui.dp(48));diagnostic.setChecked(includeDiagnostic);diagnostic.setOnCheckedChangeListener((b,checked)->includeDiagnostic=checked);body.addView(diagnostic);
         body.addView(ui.text("包含设备型号、系统版本和最近应用包名。\n下一步可检查、修改；不会自动上传。",12,ui.muted,false));ui.gap(body,20);

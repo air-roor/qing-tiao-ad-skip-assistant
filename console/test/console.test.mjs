@@ -8,7 +8,7 @@ import { hashPassword, verifyPassword, csvCell } from '../security.mjs';
 const ORIGIN='http://127.0.0.1:3887';
 const password='test-only-secret-choose-a-real-one';
 const adminHash=await hashPassword(password);
-const releaseUrl='https://github.com/air-roor/qing-tiao-ad-skip-assistant/releases/download/v0.3.0-beta.6/qing-tiao-0.3.0-beta.6.apk';
+const releaseUrl='https://github.com/air-roor/qing-tiao-ad-skip-assistant/releases/download/v0.3.0-beta.7/qing-tiao-0.3.0-beta.7.apk';
 const upstream=async()=>new Response(JSON.stringify([{tag_name:'v1',assets:[{id:1,name:'test.apk',download_count:7,size:1024,browser_download_url:releaseUrl},{id:2,name:'source.zip',download_count:900,size:1}]}]),{status:200});
 async function fixture(t,opts={}){
  const app=createConsole({origin:ORIGIN,adminHash,dbPath:':memory:',fetchImpl:upstream,...opts});await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
@@ -36,7 +36,7 @@ test('admin reads require authentication; CSRF and logout are enforced',async t=
 test('download channel tracking excludes HEAD and prefetch; does not fake installs',async t=>{
  const f=await fixture(t);const res=await f.request('/download?channel=xhs');assert.equal(res.status,302);assert.equal(res.headers.get('location'),releaseUrl);
  await f.request('/download?channel=xhs');await f.request('/download?channel=bad%20channel');await f.request('/download?channel=head','HEAD');await f.request('/download?channel=prefetch','GET',undefined,{'Sec-Purpose':'prefetch'});
- await f.login();const data=await f.overview();assert.equal(data.totals.redirects,3);assert.equal(data.totals.today,3);assert.equal(data.channels.find(c=>c.channel==='xhs').count,2);assert.equal(data.recent[0].version,'v0.3.0-beta.6');assert.equal(data.installs,undefined);assert.equal(data.github.total,7);
+ await f.login();const data=await f.overview();assert.equal(data.totals.redirects,3);assert.equal(data.totals.today,3);assert.equal(data.channels.find(c=>c.channel==='xhs').count,2);assert.equal(data.recent[0].version,'v0.3.0-beta.7');assert.equal(data.installs,undefined);assert.equal(data.github.total,7);
 });
 test('GitHub caches counters and preserves last-known values on upstream failure',async t=>{
  let now=Date.parse('2026-10-25T04:00:00Z'),calls=0,failed=false;
@@ -53,7 +53,7 @@ test('feedback requires consent, strips unapproved fields and diagnostic opt-in'
 });
 test('feedback workflow persists statuses, filters, notes and safe CSV export',async t=>{
  const f=await fixture(t);const receipt=await (await f.request('/api/public/feedback','POST',{...report,app:'=HYPERLINK("x")',includeDiagnostic:true,diagnostic:'synthetic diagnostic'})).json();await f.login();
- assert.equal((await f.request('/api/admin/feedback/'+receipt.id,'PATCH',{status:'fixed',note:'resolved in test'})).status,200);
+ assert.equal((await f.request('/api/admin/feedback/'+receipt.id,'PATCH',{status:'fixed',note:'resolved in test',revision:0})).status,200);
  const listing=await (await f.request('/api/admin/feedback?status=fixed')).json();assert.equal(listing.items[0].note,'resolved in test');assert.equal(listing.items[0].diagnostic,'synthetic diagnostic');assert.equal((await (await f.request('/api/admin/feedback?status=new')).json()).items.length,0);
  const csv=await (await f.request('/api/admin/export.csv')).text();assert.ok(csv.includes("'=HYPERLINK"));assert.equal(csv.includes(receipt.deleteToken),false);
 });
@@ -89,4 +89,30 @@ test('backup restore replays deletion ledger without reviving deleted feedback',
  const first=await fixture(t,{dbPath:path});const receipt=await(await first.request('/api/public/feedback','POST',report)).json();await first.snapshot(snapshot);
  assert.equal((await first.request('/api/public/feedback/delete','POST',{id:receipt.id,deleteToken:receipt.deleteToken})).status,200);await first.close();copyFileSync(snapshot,path);
  const second=await fixture(t,{dbPath:path});await second.login();assert.equal((await second.overview()).totals.feedback,0);await second.close();removeTestDir(dir);
+});
+
+
+test('feedback search, category, pagination and export use the same literal filters',async t=>{
+ const f=await fixture(t);const at=Date.now();
+ const insert=f.db.prepare('INSERT INTO feedback(id,at,category,app,version,device,system,detail,contact,diagnostic,status,note,delete_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)');
+ for(let i=0;i<27;i++)insert.run(`test-page-${i}`,at+i,i%2?'广告没有跳过':'跳过速度慢',i%2?'音乐':'阅读','beta.7','Pura 70','test',i===4?'contains literal %_ and SQL quote \'':'page fixture','','','new','','test-hash');
+ await f.login();
+ let data=await(await f.request('/api/admin/feedback?page=1&pageSize=10')).json();assert.equal(data.total,27);assert.equal(data.items.length,10);assert.equal(data.totalPages,3);
+ data=await(await f.request('/api/admin/feedback?page=3&pageSize=10')).json();assert.equal(data.items.length,7);
+ data=await(await f.request('/api/admin/feedback?q='+encodeURIComponent('音乐')+'&category='+encodeURIComponent('广告没有跳过'))).json();assert.equal(data.total,13);assert.ok(data.items.every(item=>item.app==='音乐'));
+ data=await(await f.request('/api/admin/feedback?q='+encodeURIComponent('%_'))).json();assert.equal(data.total,1);assert.equal(data.items[0].id,'test-page-4');
+ const csv=await(await f.request('/api/admin/export.csv?page=3&pageSize=10&q='+encodeURIComponent('音乐'))).text();assert.equal(csv.split('\r\n').length,14);assert.equal(csv.includes('阅读'),false);
+ assert.equal((await f.request('/api/admin/feedback?page=-1')).status,400);assert.equal((await f.request('/api/admin/feedback?status=unknown')).status,400);
+});
+test('two editors cannot silently overwrite each other',async t=>{
+ const f=await fixture(t);const receipt=await(await f.request('/api/public/feedback','POST',report)).json();await f.login();
+ let response=await f.request('/api/admin/feedback/'+receipt.id,'PATCH',{status:'investigating',note:'first editor',revision:0});assert.equal(response.status,200);assert.equal((await response.json()).revision,1);
+ response=await f.request('/api/admin/feedback/'+receipt.id,'PATCH',{status:'closed',note:'stale editor',revision:0});assert.equal(response.status,409);
+ const data=await(await f.request('/api/admin/feedback')).json();assert.equal(data.items[0].note,'first editor');assert.equal(data.items[0].revision,1);
+});
+test('existing feedback database gains revision column without losing data',async t=>{
+ const {DatabaseSync}=await import('node:sqlite');const dir=mkdtempSync(join(tmpdir(),'qt-console-')),path=join(dir,'legacy.sqlite');
+ const old=new DatabaseSync(path);old.exec("CREATE TABLE feedback(id TEXT PRIMARY KEY,at INTEGER,category TEXT,app TEXT,version TEXT,device TEXT,system TEXT,detail TEXT,contact TEXT,diagnostic TEXT,status TEXT,note TEXT,delete_hash TEXT)");
+ old.prepare('INSERT INTO feedback VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run('legacy',Date.now(),'其他问题','legacy-app','','','','retained data','','','new','','hash');old.close();
+ const f=await fixture(t,{dbPath:path});await f.login();const data=await(await f.request('/api/admin/feedback')).json();assert.equal(data.items[0].detail,'retained data');assert.equal(data.items[0].revision,0);await f.close();removeTestDir(dir);
 });

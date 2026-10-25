@@ -9,7 +9,7 @@ import { secret, digest, verifyPassword, csvCell } from './security.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = 'air-roor/qing-tiao-ad-skip-assistant';
-const DEFAULT_URL = `https://github.com/${REPO}/releases/download/v0.3.0-beta.6/qing-tiao-0.3.0-beta.6.apk`;
+const DEFAULT_URL = `https://github.com/${REPO}/releases/download/v0.3.0-beta.7/qing-tiao-0.3.0-beta.7.apk`;
 export const NOTICE = '当前为免费公测。正式收费后，所有用户（包括参加过免费公测的用户）均需登录账号并购买使用权益，公测不赠送永久免费权益。收费日期与最终价格将提前公告。';
 const CATEGORIES = ['广告没有跳过','跳过速度慢','误点了普通按钮','无障碍自动关闭','应用选择问题','其他问题'];
 const STATUSES = ['new','investigating','fixed','closed'];
@@ -35,6 +35,7 @@ export function createConsole(options={}) {
     CREATE INDEX IF NOT EXISTS feedback_at ON feedback(at);
     CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, at INTEGER NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL);
   `);
+  if(!db.prepare('PRAGMA table_info(feedback)').all().some(column=>column.name==='revision'))db.exec('ALTER TABLE feedback ADD COLUMN revision INTEGER NOT NULL DEFAULT 0');
   const deletionLedger=dbPath===':memory:'?null:join(dirname(dbPath),'feedback-deletions.jsonl');
   if(deletionLedger&&existsSync(deletionLedger)){
     for(const line of readFileSync(deletionLedger,'utf8').split('\n').filter(Boolean)){
@@ -45,7 +46,7 @@ export function createConsole(options={}) {
   }
   const setting=(key,fallback)=>{const row=db.prepare('SELECT value FROM settings WHERE key=?').get(key);return row?JSON.parse(row.value):fallback;};
   const set=(key,value)=>db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,JSON.stringify(value));
-  const policy=()=>({phase:setting('phase','beta'),notice:NOTICE,plannedPriceFen:990,allUsersRequirePayment:true,announcement:setting('announcement',''),paymentDate:setting('paymentDate',null),downloadUrl:setting('downloadUrl',DEFAULT_URL),paymentEnabled:false,legacyOfflineBuildsRevocable:false});
+  const policy=()=>({publicOrigin:origin,phase:setting('phase','beta'),notice:NOTICE,plannedPriceFen:990,allUsersRequirePayment:true,announcement:setting('announcement',''),paymentDate:setting('paymentDate',null),downloadUrl:setting('downloadUrl',DEFAULT_URL),paymentEnabled:false,legacyOfflineBuildsRevocable:false});
   const audit=(action,target)=>db.prepare('INSERT INTO audit(at,action,target) VALUES(?,?,?)').run(clock(),action,target);
   const version=()=>{const url=new URL(policy().downloadUrl);return decodeURIComponent(url.pathname.split('/')[5] || 'unknown');};
   const sessions=new Map(),limits=new Map();
@@ -70,9 +71,8 @@ export function createConsole(options={}) {
   }
   function limit(req,key,max,window=600_000){
     const now=clock(),id=`${key}:${digest(remote(req))}`;
-    let slot=limits.get(id);if(!slot||slot.until<now){slot={n:0,until:now+window};limits.set(id,slot);}
+    let slot=limits.get(id);if(!slot||slot.until<now){if(!slot&&limits.size>=20_000)fail(503,'服务繁忙，请稍后再试');slot={n:0,until:now+window};limits.set(id,slot);}
     if(++slot.n>max)fail(429,'操作过于频繁，请稍后再试');
-    if(limits.size>20_000)fail(503,'服务繁忙，请稍后再试');
   }
   function auth(req){
     const cookie=String(req.headers.cookie || '').split(';').map(v=>v.trim()).find(v=>v.startsWith('qt_admin='))?.slice(9);
@@ -114,9 +114,19 @@ export function createConsole(options={}) {
     })();
     return githubPending;
   }
-  function feedbackList(url){
-    const status=url.searchParams.get('status');
-    return status&&STATUSES.includes(status)?db.prepare('SELECT id,at,category,app,version,device,system,detail,contact,diagnostic,status,note FROM feedback WHERE status=? ORDER BY at DESC LIMIT 500').all(status):db.prepare('SELECT id,at,category,app,version,device,system,detail,contact,diagnostic,status,note FROM feedback ORDER BY at DESC LIMIT 500').all();
+  function feedbackList(url,exporting=false){
+    const status=url.searchParams.get('status')||'',category=url.searchParams.get('category')||'',query=clean(url.searchParams.get('q'),120).toLowerCase();
+    if(status&&!STATUSES.includes(status))fail(400,'筛选状态无效');if(category&&!CATEGORIES.includes(category))fail(400,'问题类型无效');
+    const where=[],args=[];
+    if(status){where.push('status=?');args.push(status);}if(category){where.push('category=?');args.push(category);}
+    if(query){where.push('(instr(lower(id),?)>0 OR instr(lower(app),?)>0 OR instr(lower(detail),?)>0 OR instr(lower(device),?)>0 OR instr(lower(version),?)>0 OR instr(lower(note),?)>0)');args.push(...Array(6).fill(query));}
+    const suffix=where.length?' WHERE '+where.join(' AND '):'';
+    const total=db.prepare('SELECT COUNT(*) n FROM feedback'+suffix).get(...args).n;
+    const rawPage=url.searchParams.get('page')||'1',rawSize=url.searchParams.get('pageSize')||'20';
+    if(!/^\d{1,8}$/.test(rawPage)||Number(rawPage)<1||![10,20,50,100].includes(Number(rawSize)))fail(400,'分页参数无效');
+    const pageSize=exporting?5000:Number(rawSize),totalPages=Math.max(1,Math.ceil(total/pageSize)),page=exporting?1:Math.min(Number(rawPage),totalPages);
+    const items=db.prepare('SELECT id,at,category,app,version,device,system,detail,contact,diagnostic,status,note,revision FROM feedback'+suffix+' ORDER BY at DESC,id DESC LIMIT ? OFFSET ?').all(...args,pageSize,(page-1)*pageSize);
+    return {items,total,page,pageSize,totalPages};
   }
   const server=createServer(async(req,res)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');
@@ -149,13 +159,16 @@ export function createConsole(options={}) {
             recent:db.prepare('SELECT at,channel,version FROM downloads ORDER BY id DESC LIMIT 20').all(),
             audit:db.prepare('SELECT at,action,target FROM audit ORDER BY id DESC LIMIT 10').all()});
         }
-        if(method==='GET' && path==='/api/admin/feedback')return json(res,200,{items:feedbackList(url)});
+        if(method==='GET' && path==='/api/admin/feedback')return json(res,200,feedbackList(url));
         if(method==='PATCH' && path.startsWith('/api/admin/feedback/')){
           const id=path.slice('/api/admin/feedback/'.length),body=await jsonBody(req);if(!STATUSES.includes(body.status))fail(400,'处理状态无效');
-          const result=db.prepare('UPDATE feedback SET status=?,note=? WHERE id=?').run(body.status,clean(body.note,1000),id);if(!result.changes)fail(404,'反馈不存在');audit('feedback_status',id);return json(res,200,{ok:true});
+          if(!Number.isSafeInteger(body.revision)||body.revision<0)fail(400,'缺少反馈版本，请刷新后重试');
+          const result=db.prepare('UPDATE feedback SET status=?,note=?,revision=revision+1 WHERE id=? AND revision=?').run(body.status,clean(body.note,1000),id,body.revision);
+          if(!result.changes){if(!db.prepare('SELECT id FROM feedback WHERE id=?').get(id))fail(404,'反馈不存在');fail(409,'这条反馈已在其他页面更新，当前草稿已保留，请核对后重新读取');}
+          audit('feedback_status',id);return json(res,200,{ok:true,revision:body.revision+1});
         }
         if(method==='GET' && path==='/api/admin/export.csv'){
-          const rows=feedbackList(url),keys=['id','at','category','app','version','device','system','detail','contact','diagnostic','status','note'];
+          const rows=feedbackList(url,true).items,keys=['id','at','category','app','version','device','system','detail','contact','diagnostic','status','note'];
           const content='\uFEFF'+[keys.map(csvCell).join(','),...rows.map(row=>keys.map(key=>csvCell(row[key])).join(','))].join('\r\n');
           res.writeHead(200,{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="qing-tiao-feedback.csv"'});return res.end(content);
         }

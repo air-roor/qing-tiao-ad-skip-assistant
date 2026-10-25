@@ -1,1 +1,60 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>公测运营后台 · 轻跳</title><link rel="stylesheet" href="/style.css"><script src="/app.js" type="module"></script></head><body data-page="admin"><nav class="top"><a class="brand" href="/admin">Q<span>轻跳 <small>OPERATOR CONSOLE</small></span></a><div><a href="/" target="_blank" rel="noopener">下载页 ↗</a><button id="logout" hidden>退出登录</button></div></nav><main class="dashboard"><section id="login" class="card login"><div class="eyebrow">PRIVATE / 管理员入口</div><h1>公测数据，<em>在这里汇总。</em></h1><p class="muted">首次登录密码见本机 console/data/首次登录说明.txt。不要把密码发到群聊或放进公开仓库。</p><form id="login-form"><label>管理员密码<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><button class="primary" type="submit">进入运营后台</button><p id="login-message" role="status"></p></form></section><section id="workspace" hidden><header class="page-head"><div><div class="eyebrow">PUBLIC BETA / 公测概览</div><h1>把每一条反馈，<em>变成下一次改进。</em></h1></div><button id="refresh">立即刷新</button></header><p class="live" id="sync-state" role="status"></p><div class="grid metrics"><article class="card"><span>GitHub APK 下载计数</span><strong id="metric-github">—</strong><small>API 原始累计计数，不是安装人数</small></article><article class="card"><span>今日入口跳转</span><strong id="metric-today">—</strong><small>北京时间 · 点击后跳往 APK</small></article><article class="card"><span>本站入口跳转</span><strong id="metric-total">—</strong><small>近 365 天 · 重复点击也计数</small></article><article class="card"><span>待处理反馈</span><strong id="metric-feedback">—</strong><small id="feedback-total">—</small></article></div><p class="muted boundary">入口数据每 10 秒刷新；GitHub 最多每 2 分钟同步，仍受上游更新延迟影响。两个口径有重叠，不相加，不代表独立用户、完成安装或广告跳过成功。</p><div class="grid two"><section class="card"><h2>近 14 天下载入口趋势</h2><div id="trend" class="trend" aria-label="每日入口跳转次数"></div><p class="muted" id="trend-empty"></p></section><section class="card"><h2>推广渠道</h2><div id="channels"></div><p class="muted">推广时使用本站 /download?channel=xhs；直接分享 GitHub 链接无法归入渠道。</p></section></div><section class="card"><h2>各版本 GitHub APK 下载计数</h2><p id="github-status" class="muted"></p><div class="table-wrap"><table><thead><tr><th>版本</th><th>安装包</th><th>下载计数</th><th>文件大小</th></tr></thead><tbody id="releases"></tbody></table></div></section><section class="card"><div class="section-head"><div><h2>用户反馈</h2><p class="muted">显示最近 500 条。仅管理员可见；原始反馈最长保留 90 天。</p></div><div class="actions"><select id="feedback-filter" aria-label="筛选反馈状态"><option value="">全部状态</option><option value="new">待处理</option><option value="investigating">处理中</option><option value="fixed">已修复</option><option value="closed">已关闭</option></select><a class="button" id="export" href="/api/admin/export.csv">导出当前筛选 CSV</a></div></div><div id="feedback-list"></div></section><section class="card"><h2>公测规则与收费预告</h2><p id="policy-notice" class="notice"></p><p class="muted">正式收费时所有用户都需登录并购买，公测不赠送永久权益。计划价格 9.9 元。账号和支付尚未接入，现在不能开放收款或远程停用旧 APK。</p><form id="policy-form"><div class="grid two"><label>当前阶段<select name="phase"><option value="beta">免费公测</option><option value="announced">免费公测 · 已发布收费预告</option></select></label><label>计划收费日期（可留空）<input type="date" name="paymentDate"></label></div><label>公告补充<textarea name="announcement" rows="3" maxlength="1000" placeholder="具体免费测试安排、下次更新或已知问题"></textarea></label><label>当前 APK 下载地址<input name="downloadUrl" type="url" required></label><button class="primary" type="submit">保存规则与公告</button><p id="policy-message" role="status"></p></form></section></section></main></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>运营工作台 · 轻跳</title><link rel="stylesheet" href="/style.css"><script src="/app.js" type="module"></script>
+</head>
+<body data-page="admin">
+<nav class="top"><a class="brand" href="/admin">Q<span>轻跳 <small>OPERATOR CONSOLE</small></span></a><div><a href="/" target="_blank" rel="noopener">查看下载页 ↗</a><button id="logout" hidden>退出登录</button></div></nav>
+<main class="dashboard">
+  <section id="login" class="card login">
+    <div class="eyebrow">PRIVATE WORKSPACE / 管理员入口</div><h1>每一条反馈，<br><em>都是改进的起点。</em></h1>
+    <p class="muted">首次登录密码见本机 console/data/首次登录说明.txt。运营数据与用户反馈仅向管理员开放。</p>
+    <form id="login-form"><label>管理员密码<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><button class="primary" type="submit">进入运营后台</button><p id="login-message" role="status"></p></form>
+  </section>
+  <section id="workspace" hidden>
+    <aside class="workspace-nav" aria-label="工作台导航">
+      <div class="eyebrow">WORKSPACE</div>
+      <button type="button" data-view="overview" class="active"><span>01</span>运营概览</button>
+      <button type="button" data-view="feedback"><span>02</span>反馈工单<b id="nav-feedback-count">0</b></button>
+      <button type="button" data-view="promotion"><span>03</span>推广渠道</button>
+      <button type="button" data-view="settings"><span>04</span>公测设置</button>
+      <div class="nav-foot"><span class="status-dot"></span>免费公测中<p><span id="nav-location">本机工作台</span><br>支付与账号尚未接入</p></div>
+    </aside>
+    <div class="workspace-main">
+      <header class="page-head"><div><div class="eyebrow" id="view-kicker">LIVE OVERVIEW</div><h1 id="view-title">让公测进展，<em>清晰可见。</em></h1><p id="view-subtitle" class="muted">关注真实数据，优先处理影响使用的问题。</p></div><button id="refresh">刷新数据</button></header>
+      <p class="live" id="sync-state" role="status"></p>
+      <section data-panel="overview">
+        <div class="grid metrics">
+          <article class="card"><span>GitHub APK 下载计数</span><strong id="metric-github">—</strong><small>累计 API 计数，非安装人数</small></article>
+          <article class="card"><span>今日入口跳转</span><strong id="metric-today">—</strong><small>北京时间 · 跳转到安装包</small></article>
+          <article class="card"><span>本站入口跳转</span><strong id="metric-total">—</strong><small>近 365 天 · 含重复点击</small></article>
+          <article class="card actionable"><span>待处理反馈</span><strong id="metric-feedback">—</strong><small id="feedback-total">—</small><button type="button" data-view="feedback" class="text-button">去处理 →</button></article>
+        </div>
+        <p class="muted boundary">本站数据每 10 秒更新，GitHub 最多每 2 分钟同步。两个下载口径有重叠，不能相加，也不代表独立用户或安装人数。</p>
+        <div class="grid two"><section class="card"><div class="section-head"><h2>近 14 天入口趋势</h2><span class="tag">北京时间</span></div><div id="trend" class="trend" aria-label="每日入口跳转次数"></div><p class="muted" id="trend-empty"></p></section><section class="card"><h2>公测处理进展</h2><div id="feedback-progress" class="progress-summary"></div><p class="muted">反馈由用户主动提交；模拟测试不计入实际兼容率。</p><button type="button" data-view="feedback">查看反馈工单</button></section></div>
+        <section class="card"><h2>各版本下载计数</h2><p id="github-status" class="muted"></p><div class="table-wrap"><table><thead><tr><th>版本</th><th>安装包</th><th>下载计数</th><th>文件大小</th></tr></thead><tbody id="releases"></tbody></table></div></section>
+      </section>
+      <section data-panel="feedback" hidden>
+        <section class="card feedback-toolbar"><div class="section-head"><div><h2>反馈工单</h2><p class="muted" id="feedback-summary">正在读取反馈…</p></div><a class="button" id="export" href="/api/admin/export.csv">导出筛选结果 CSV</a></div>
+          <div class="filter-grid"><label>搜索反馈<input id="feedback-search" type="search" maxlength="120" placeholder="应用、描述、设备、版本或编号"></label><label>处理状态<select id="feedback-filter"><option value="">全部状态</option><option value="new">待处理</option><option value="investigating">处理中</option><option value="fixed">已修复</option><option value="closed">已关闭</option></select></label><label>问题类型<select id="feedback-category"><option value="">全部类型</option><option>广告没有跳过</option><option>跳过速度慢</option><option>误点了普通按钮</option><option>无障碍自动关闭</option><option>应用选择问题</option><option>其他问题</option></select></label></div>
+          <div class="section-head"><span class="muted" id="draft-state">没有未保存的工单修改</span><div class="actions"><button type="button" id="discard-drafts" class="text-button" disabled>放弃未保存修改</button><button type="button" id="reset-filters" class="text-button">清除筛选</button></div></div>
+        </section>
+        <p id="feedback-action-message" role="status"></p><div id="feedback-list" aria-live="polite"></div>
+        <div class="pagination"><button id="page-prev" type="button">上一页</button><span id="page-info" class="muted"></span><button id="page-next" type="button">下一页</button><label>每页<select id="page-size" aria-label="每页条数"><option>10</option><option selected>20</option><option>50</option><option>100</option></select></label></div>
+        <p class="muted boundary">导出当前筛选结果的前 5000 条，不限于当前页。反馈最长保留 90 天。</p>
+      </section>
+      <section data-panel="promotion" hidden>
+        <div class="grid two"><section class="card"><div class="eyebrow">CHANNEL LINKS</div><h2>给每个推广渠道，一个专属入口。</h2><p class="muted">用下载页入口统计渠道；不要直接把 GitHub 地址当渠道链接。</p><label>渠道代号<input id="channel-code" value="xhs" maxlength="32" pattern="[a-z0-9_-]{1,32}" placeholder="例如 xhs、wechat 或 xhs_post01"></label><div class="preset-channels"><button type="button" data-channel="xhs">小红书</button><button type="button" data-channel="wechat">微信</button><button type="button" data-channel="share">朋友分享</button></div><label>推广链接<input id="channel-link" readonly></label><button id="copy-channel" class="primary" type="button">复制推广链接</button><p id="channel-message" role="status"></p></section><section class="card"><h2>渠道入口记录</h2><div id="channels"></div><p class="muted">近 365 天入口跳转。重复点击也会计数，不是渠道新增用户。</p></section></div>
+        <section class="card"><h2>最近入口活动</h2><div class="table-wrap"><table><thead><tr><th>时间</th><th>渠道</th><th>目标版本</th></tr></thead><tbody id="recent-downloads"></tbody></table></div><p id="recent-empty" class="muted"></p></section>
+      </section>
+      <section data-panel="settings" hidden>
+        <section class="card"><div class="eyebrow">PUBLIC BETA POLICY</div><h2>把公测与后续收费，说清楚。</h2><p id="policy-notice" class="notice"></p><p class="muted">正式收费后所有用户均需登录并购买，公测不赠送永久权益。计划价 9.9 元；当前没有账号、支付或远程停用能力。</p>
+          <form id="policy-form"><div class="grid two"><label>当前阶段<select name="phase"><option value="beta">免费公测</option><option value="announced">免费公测 · 已发布收费预告</option></select></label><label>计划收费日期（可留空）<input type="date" name="paymentDate"></label></div><label>公告补充<textarea name="announcement" rows="4" maxlength="1000" placeholder="具体免费测试安排、下次更新或已知问题"></textarea></label><label>当前 APK 下载地址<input name="downloadUrl" type="url" required></label><div class="actions"><button class="primary" type="submit">保存规则与公告</button><button id="reset-policy" type="button">恢复已保存设置</button><span class="muted" id="policy-dirty">已载入当前设置</span></div><p id="policy-message" role="status"></p></form>
+        </section>
+        <section class="card"><h2>当前部署状态</h2><p id="deployment-state" class="muted"></p><p class="muted">下载计数与反馈后台已具备本地运行能力。正式账号和支付仍需单独接入，旧离线 APK 不能远程撤回。</p></section>
+      </section>
+    </div>
+  </section>
+</main>
+</body></html>
