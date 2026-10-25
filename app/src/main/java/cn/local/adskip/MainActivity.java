@@ -20,7 +20,7 @@ import android.widget.*;
 import java.util.*;
 
 public final class MainActivity extends Activity {
-    static final String VERSION = "0.3.0-beta.3";
+    static final String VERSION = "0.3.0-beta.4";
     private static final String REPOSITORY = "https://github.com/air-roor/qing-tiao-ad-skip-assistant";
     private static final String RELEASES = REPOSITORY + "/releases/tag/v" + VERSION;
     private Ui ui;
@@ -131,13 +131,14 @@ public final class MainActivity extends Activity {
     }
     private void section(LinearLayout p,String title){p.addView(ui.heading(title,17));ui.gap(p,12);}
     private void navigation(){
+        boolean compact=getResources().getConfiguration().screenHeightDp<500;
         LinearLayout nav=ui.row();nav.setPadding(ui.dp(12),ui.dp(5),ui.dp(12),ui.dp(7));nav.setBackgroundColor(ui.surface);
         String[] labels={"首页","应用","我的"},destinations={"home","apps","me"},icons={"home","apps","user"};
         for(int i=0;i<3;i++){
             final String destination=destinations[i];boolean selected=screen.equals(destination);
             Button b=ui.button(labels[i],false,()->go(destination));b.setTextSize(12);b.setTextColor(selected?ui.primary:ui.muted);
             b.setBackground(ui.ripple(selected?ui.soft:ui.surface,20));b.setPadding(ui.dp(4),ui.dp(8),ui.dp(4),ui.dp(8));
-            Ui.Glyph icon=new Ui.Glyph(icons[i],selected?ui.primary:ui.muted);icon.setBounds(0,0,ui.dp(23),ui.dp(23));b.setCompoundDrawables(null,icon,null,null);b.setCompoundDrawablePadding(ui.dp(5));b.setSelected(selected);
+            if(!compact){Ui.Glyph icon=new Ui.Glyph(icons[i],selected?ui.primary:ui.muted);icon.setBounds(0,0,ui.dp(23),ui.dp(23));b.setCompoundDrawables(null,icon,null,null);b.setCompoundDrawablePadding(ui.dp(5));}b.setSelected(selected);
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.leftMargin=ui.dp(5);p.rightMargin=ui.dp(5);nav.addView(b,p);
         }
         shell.addView(nav,new LinearLayout.LayoutParams(-1,-2));
@@ -176,14 +177,17 @@ public final class MainActivity extends Activity {
         if(draftApps==null)draftApps=Store.apps(this);
         boolean compact=getResources().getConfiguration().screenHeightDp<500;
         LinearLayout head=ui.column();head.setPadding(ui.dp(20),ui.dp(compact?4:16),ui.dp(20),ui.dp(8));content.addView(head);
-        LinearLayout titleRow=ui.row();titleRow.addView(ui.heading("应用管理",compact?22:28),new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout titleRow=ui.row();titleRow.addView(ui.heading("应用管理",compact?20:28),new LinearLayout.LayoutParams(compact?-2:0,-2,compact?0:1));
+        EditText search=ui.field("搜索应用名称或包名",false);search.setContentDescription("搜索应用名称或包名");search.setText(appQuery);
+        if(compact){LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(0,-2,1);qp.leftMargin=ui.dp(16);qp.rightMargin=ui.dp(12);titleRow.addView(search,qp);}
         Button clear=ui.button("清空",false,()->new AlertDialog.Builder(this).setTitle("清空选择？").setMessage("这只会修改草稿，点击保存后才会生效。").setNegativeButton("取消",null).setPositiveButton("清空草稿",(d,w)->{draftApps.clear();refreshApps();}).show());titleRow.addView(clear);head.addView(titleRow);
-        if(!compact){ui.gap(head,8);head.addView(ui.text("只在你选择的应用中，轻轻跳过。",13,ui.muted,false));}ui.gap(head,compact?6:18);
-        EditText search=ui.field("搜索应用名称或包名",false);search.setContentDescription("搜索应用名称或包名");search.setText(appQuery);head.addView(search);
+        if(!compact){ui.gap(head,8);head.addView(ui.text("只在你选择的应用中，轻轻跳过。",13,ui.muted,false));ui.gap(head,18);head.addView(search);}
         LinearLayout filters=ui.row();ui.gap(head,compact?4:10);head.addView(filters);
         Button all=ui.button("全部应用",!selectedOnly,()->{selectedOnly=false;render();});Button picked=ui.button("已选择",selectedOnly,()->{selectedOnly=true;render();});
         filters.addView(all,new LinearLayout.LayoutParams(0,-2,1));LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(0,-2,1);fp.leftMargin=ui.dp(10);filters.addView(picked,fp);
-        selectionCount=ui.text("",12,ui.muted,false);ui.gap(head,12);head.addView(selectionCount);
+        selectionCount=ui.text("",12,ui.muted,false);
+        if(compact){LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,2);cp.leftMargin=ui.dp(16);filters.addView(selectionCount,cp);}
+        else{ui.gap(head,12);head.addView(selectionCount);}
         FrameLayout listFrame=new FrameLayout(this);content.addView(listFrame,new LinearLayout.LayoutParams(-1,0,1));
         ListView list=new ListView(this);list.setDivider(null);list.setClipToPadding(false);list.setPadding(ui.dp(20),ui.dp(4),ui.dp(20),ui.dp(8));list.setSelector(ui.ripple(ui.surface,18));
         listFrame.addView(list,new FrameLayout.LayoutParams(-1,-1));TextView empty=ui.text(appsLoaded?"没有找到应用\n试试其他名称或切换筛选":"正在读取应用列表…",15,ui.muted,false);empty.setGravity(Gravity.CENTER);listFrame.addView(empty,new FrameLayout.LayoutParams(-1,-1));list.setEmptyView(empty);
@@ -260,13 +264,14 @@ public final class MainActivity extends Activity {
     private void renderPreview(){
         boolean diag="diagnostic".equals(feedbackId);backHeader(diag?"预览诊断":"检查反馈",()->go(diag?"me":"feedback"));body=scrollBody();
         pageTitle(body,"发送前，再看一眼","可以删除任何你不想分享的信息。");
-        EditText preview=ui.field("反馈内容",true);preview.setText(feedbackPreview);preview.setContentDescription("可编辑的反馈预览");preview.setMinLines(12);preview.setMaxLines(Integer.MAX_VALUE);preview.addTextChangedListener(watcher(v->feedbackPreview=v));body.addView(preview);ui.gap(body,16);
+        EditText preview=ui.field("反馈内容",true);preview.setText(feedbackPreview);preview.setContentDescription("可编辑的反馈预览");preview.setMinLines(4);preview.addTextChangedListener(watcher(v->feedbackPreview=v));body.addView(preview,new LinearLayout.LayoutParams(-1,ui.dp(Math.max(150,Math.min(340,getResources().getConfiguration().screenHeightDp/2)))));ui.gap(body,16);
         body.addView(ui.text("请勿发送密码、验证码或私人页面内容。GitHub Issue 公开可见；涉及隐私时请通过私信发送给开发者。",13,ui.muted,false));ui.gap(body,20);
-        ui.fullButton(body,"复制反馈文字",true,()->{ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);clipboard.setPrimaryClip(ClipData.newPlainText("轻跳反馈",feedbackPreview));toast("已复制，请选择接收方后粘贴");});ui.gap(body,10);
-        ui.fullButton(body,"系统分享",false,()->shareText(diag?"轻跳诊断":"轻跳公测反馈",feedbackPreview));ui.gap(body,10);
-        if(!diag)ui.fullButton(body,"在 GitHub 提交（公开）",false,()->{
+        LinearLayout actions=ui.column();actions.setPadding(ui.dp(20),ui.dp(10),ui.dp(20),ui.dp(10));actions.setBackgroundColor(ui.surface);LinearLayout primaryActions=ui.row();actions.addView(primaryActions);
+        Button copy=ui.button("复制反馈文字",true,()->{ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);clipboard.setPrimaryClip(ClipData.newPlainText("轻跳反馈",feedbackPreview));toast("已复制，请选择接收方后粘贴");});primaryActions.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
+        Button share=ui.button("系统分享",false,()->shareText(diag?"轻跳诊断":"轻跳公测反馈",feedbackPreview));LinearLayout.LayoutParams shareParams=new LinearLayout.LayoutParams(0,-2,1);shareParams.leftMargin=ui.dp(12);primaryActions.addView(share,shareParams);
+        if(!diag){ui.gap(actions,8);ui.fullButton(actions,"在 GitHub 提交（公开）",false,()->{
             String title="[公测反馈] "+Feedback.CATEGORIES[categoryIndex]+" · "+Feedback.clean(feedbackApp,50).replace('\n',' ');
-            Uri url=Uri.parse(REPOSITORY+"/issues/new").buildUpon().appendQueryParameter("title",title).appendQueryParameter("body",feedbackPreview).build();openUrl(url.toString());});
+            Uri url=Uri.parse(REPOSITORY+"/issues/new").buildUpon().appendQueryParameter("title",title).appendQueryParameter("body",feedbackPreview).build();openUrl(url.toString());});}content.addView(actions);
     }
     private interface OnText{void change(String value);}
     private TextWatcher watcher(OnText change){return new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int b,int c){}public void onTextChanged(CharSequence s,int a,int b,int c){change.change(s.toString());}public void afterTextChanged(Editable e){}};}

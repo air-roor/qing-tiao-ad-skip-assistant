@@ -34,7 +34,7 @@ final class Store {
         SharedPreferences p = prefs(c);
         long lastTime = p.getLong("last_time", 0), diagTime = p.getLong("diag_time", 0);
         return "轻跳诊断（用户主动导出）\n"
-            + "版本：" + MainActivity.VERSION + " (14)\n"
+            + "版本：" + MainActivity.VERSION + " (15)\n"
             + "设备：" + Build.MANUFACTURER + " " + Build.MODEL + "\n"
             + "系统：Android " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT + "\n"
             + "无障碍状态：" + (serviceEnabled ? "系统已授权或服务已连接" : "未授权") + "\n"
@@ -45,7 +45,8 @@ final class Store {
             + "最近请求：" + (lastTime == 0 ? "无" : DateFormat.getDateTimeInstance().format(new Date(lastTime))) + "\n"
             + "最近应用：" + p.getString("last_package", "无") + "\n"
             + "最近路径：" + p.getString("last_path", "无") + "\n"
-            + "命中耗时：" + p.getLong("last_elapsed", -1) + " ms\n"
+            + (c.getPackageName().equals(p.getString("last_package", "")) ? "请求时间：模拟测试不计耗时\n"
+                : "前台会话至请求：" + p.getLong("last_elapsed", -1) + " ms（包含页面加载，不是按钮识别耗时）\n")
             + "最近诊断时间：" + (diagTime == 0 ? "无" : DateFormat.getDateTimeInstance().format(new Date(diagTime))) + "\n"
             + "最近诊断应用：" + p.getString("diag_package", "无") + "\n"
             + "最近诊断结果：" + p.getString("diag_result", "无") + "\n"
