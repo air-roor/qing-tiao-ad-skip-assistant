@@ -28,7 +28,7 @@ if(page==='feedback'){
   form.elements.includeDiagnostic.addEventListener('change',()=>{$('diagnostic-field').hidden=!form.elements.includeDiagnostic.checked;});
   form.addEventListener('submit',event=>{
     event.preventDefault();if(!form.reportValidity()||sending)return;
-    const data=new FormData(form);payload={...Object.fromEntries(data),includeDiagnostic:data.has('includeDiagnostic'),consent:data.has('consent')};
+    const data=new FormData(form);payload={...Object.fromEntries(data),includeDiagnostic:data.has('includeDiagnostic'),consent:data.has('consent')};if(!payload.includeDiagnostic)delete payload.diagnostic;
     preview.textContent=[`问题类型：${payload.category}`,`相关应用：${payload.app||'未填写'}`,`轻跳版本：${payload.version||'未填写'}`,`手机：${payload.device||'未填写'}`,`系统：${payload.system||'未填写'}`,`问题描述：\n${payload.detail}`,`联系方式：${payload.contact||'未填写'}`,payload.includeDiagnostic?`主动附带诊断：\n${payload.diagnostic||'未填写'}`:'不附带诊断'].join('\n\n');previewMessage.textContent='';dialog.showModal();
   });
   back.addEventListener('click',()=>dialog.close());dialog.addEventListener('cancel',event=>{if(sending)event.preventDefault();});dialog.addEventListener('close',()=>submitButton.focus());
